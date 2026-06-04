@@ -74,7 +74,7 @@ marked.use({
             Copy
           </button>
         </div>
-        <pre class="bg-[#0d1117] p-2 rounded-b border border-[var(--color-bdl)] overflow-x-auto text-[11px] leading-relaxed m-0"><code>${highlighted}</code></pre>
+        <pre class="bg-[#0d1117] p-2 rounded-b border border-[var(--color-bdl)] overflow-x-auto text-[11px] leading-relaxed m-0 font-mono"><code>${highlighted}</code></pre>
       </div>`;
     },
 

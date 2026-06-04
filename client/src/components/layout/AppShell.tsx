@@ -6,11 +6,14 @@ import { Sidebar } from "../sidebar/Sidebar";
 import { TabBar } from "./TabBar";
 import { PanelGrid } from "./PanelGrid";
 import { useLayoutStore } from "../../stores/layoutStore";
+import { usePanelStore } from "../../stores/panelStore";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
 import {
   runningInTauri,
   minimizeWindow,
   maximizeWindow,
   closeWindow,
+  listenForTauriEvent,
 } from "../../lib/tauri";
 import { SettingsDialog, CommandPalette, WorkflowBuilder, LazyFallback } from "../../App";
 
@@ -25,6 +28,27 @@ export function AppShell() {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  // ── Tauri event listeners ──────────────────────────
+  useEffect(() => {
+    if (!runningInTauri()) return;
+
+    let cleanup1: (() => void) | undefined;
+    let cleanup2: (() => void) | undefined;
+
+    listenForTauriEvent("new-session", () => {
+      usePanelStore.getState().addPanel();
+    }).then(fn => { cleanup1 = fn; });
+
+    listenForTauriEvent<string>("folder-dropped", (path) => {
+      useWorkspaceStore.getState().addWorkspace(path).catch(() => {});
+    }).then(fn => { cleanup2 = fn; });
+
+    return () => {
+      cleanup1?.();
+      cleanup2?.();
+    };
   }, []);
 
   const handleMinimize = useCallback(() => {
@@ -66,7 +90,6 @@ export function AppShell() {
           <span className="text-[11px] font-semibold text-[var(--color-t2)] tracking-wide">
             pi
           </span>
-          <span className="text-[9px] text-[var(--color-t3)]">v2</span>
         </div>
         <div className="flex h-full">
           <button

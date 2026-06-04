@@ -141,13 +141,45 @@ body,
   border-radius: var(--radius, 4px);
 }
 
+/* Density adjustments */
+[data-density="compact"] {
+  --pad-sm: 0.25rem;
+  --pad-md: 0.5rem;
+  --pad-lg: 0.75rem;
+  --gap-sm: 0.25rem;
+  --gap-md: 0.5rem;
+}
+[data-density="normal"] {
+  --pad-sm: 0.5rem;
+  --pad-md: 0.75rem;
+  --pad-lg: 1rem;
+  --gap-sm: 0.5rem;
+  --gap-md: 0.75rem;
+}
+[data-density="comfortable"] {
+  --pad-sm: 0.75rem;
+  --pad-md: 1rem;
+  --pad-lg: 1.5rem;
+  --gap-sm: 0.75rem;
+  --gap-md: 1rem;
+}
+
+/* Apply density vars to key spacing areas */
+[data-density] .message-bubble { padding: var(--pad-sm) var(--pad-md); }
+[data-density] .composer-container { padding: var(--pad-sm); }
+[data-density] .tab-bar { gap: var(--gap-sm); }
+
 .code-block-wrapper pre,
 .code-block-wrapper code,
+.code-block-wrapper pre code,
 pre code,
 pre,
 code[class*="language-"],
 pre[class*="language-"],
-.hljs {
+.hljs,
+[class*="language-"],
+.message-content pre,
+.message-content code {
   font-family: var(--font-mono) !important;
 }
 

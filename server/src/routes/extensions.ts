@@ -39,13 +39,21 @@ function listLocalExtensions(): ExtensionInfo[] {
             enabled: pkg.enabled !== false,
             description: pkg.description,
           });
-        } catch {
-          // Skip invalid
+        } catch (e: any) {
+          console.error(`[extensions] Failed to parse ${manifestPath}:`, e.message);
         }
+      } else {
+        result.push({
+          id: entry.name,
+          name: entry.name,
+          version: "0.0.0",
+          enabled: true,
+          description: "No package.json",
+        });
       }
     }
-  } catch {
-    // Directory doesn't exist or can't be read
+  } catch (e: any) {
+    console.error(`[extensions] Failed to read ${EXTENSIONS_DIR}:`, e.message);
   }
   return result;
 }

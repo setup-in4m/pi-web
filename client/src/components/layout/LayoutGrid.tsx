@@ -46,7 +46,7 @@ export function LayoutGrid() {
   const renderSingle = () => (
     <div className="flex-1 bg-[var(--color-bg)] overflow-hidden min-h-0">
       <ErrorBoundary>
-        <Panel panel={panels[0]} isActive={activeIndex === 0} panelIndex={0} />
+        <Panel panel={panels[activeIndex] || panels[0]} isActive={true} panelIndex={activeIndex} />
       </ErrorBoundary>
     </div>
   );
@@ -147,7 +147,7 @@ export function LayoutGrid() {
   };
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-hidden min-h-0 bg-[var(--color-bd)]" style={{ gap: 0 }}>
+    <div ref={containerRef} className="flex-1 overflow-hidden min-h-0 bg-[var(--color-bd)]" style={{ gap: 0 }} key={preset}>
       {renderLayout()}
     </div>
   );

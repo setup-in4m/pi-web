@@ -5,6 +5,7 @@ import { useModelStore } from "../../stores/modelStore";
 import { usePanelStore } from "../../stores/panelStore";
 import { useToastStore } from "../../stores/toastStore";
 import * as api from "../../lib/api";
+import { openFolder } from "../../lib/tauri";
 import { isConnected } from "../../lib/ws";
 
 export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
@@ -31,13 +32,23 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   const handleBrowse = async () => {
     try {
-      const result = await api.browseFolder();
-      if (!result.cancelled && result.path) {
-        await addWorkspace(result.path);
-        setExpanded((prev) => new Set(prev).add(result.path!));
+      // 1. Tauri native dialog (instant, returns real path)
+      const tauriPath = await openFolder();
+      if (tauriPath) {
+        await addWorkspace(tauriPath);
+        setExpanded((prev) => new Set(prev).add(tauriPath));
+        return;
+      }
+
+      // 2. Browser: prompt for manual path entry (instant)
+      const manualPath = window.prompt("Enter folder path:", "");
+      if (manualPath && manualPath.trim()) {
+        await addWorkspace(manualPath.trim());
+        setExpanded((prev) => new Set(prev).add(manualPath.trim()));
+        return;
       }
     } catch (e: any) {
-      addToast(e.message || "Failed to browse folder", "error");
+      addToast(e.message || "Failed to open folder", "error");
     }
   };
 
@@ -91,7 +102,7 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
           π
         </div>
         <span className="text-xs font-semibold">pi</span>
-        {version && <span className="text-[9px] text-[var(--color-t3)] ml-auto">v{version}</span>}
+        {version && <span className="text-[9px] text-[var(--color-t3)] ml-auto">{version}</span>}
       </div>
 
       {/* Actions */}

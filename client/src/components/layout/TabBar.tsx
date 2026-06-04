@@ -34,6 +34,7 @@ export function TabBar() {
   const [editDraft, setEditDraft] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
   const dragIndex = useRef<number | null>(null);
+  const wasDragged = useRef(false);
 
   useEffect(() => {
     const handler = () => setContextMenu(null);
@@ -65,12 +66,12 @@ export function TabBar() {
     setEditDraft("");
   };
 
-  // Drag-and-drop via grip handle only
+  // Drag-and-drop: entire tab is draggable
   const onDragStart = (e: React.DragEvent, idx: number) => {
+    wasDragged.current = true;
     dragIndex.current = idx;
     e.dataTransfer.setData("text/plain", String(idx));
     e.dataTransfer.effectAllowed = "move";
-    // Set a small transparent drag image so the cursor doesn't obscure
     const ghost = document.createElement("div");
     ghost.style.width = "1px";
     ghost.style.height = "1px";
@@ -107,6 +108,16 @@ export function TabBar() {
 
   const onDragEnd = () => {
     dragIndex.current = null;
+    // Reset wasDragged after a tick so onClick can check it
+    setTimeout(() => { wasDragged.current = false; }, 0);
+  };
+
+  const handleTabClick = (_e: React.MouseEvent, idx: number) => {
+    if (wasDragged.current) {
+      wasDragged.current = false;
+      return; // skip click if we just finished a drag
+    }
+    setActive(idx);
   };
 
   const handleContextMenu = (e: React.MouseEvent, index: number) => {
@@ -127,11 +138,14 @@ export function TabBar() {
       {panels.map((p, i) => (
         <div
           key={p.id}
+          draggable
+          onDragStart={(e) => onDragStart(e, i)}
+          onDragEnd={onDragEnd}
           onDragOver={onDragOver}
           onDragEnter={onDragEnter}
           onDragLeave={onDragLeave}
           onDrop={(e) => onDrop(e, i)}
-          onClick={() => setActive(i)}
+          onClick={(e) => handleTabClick(e, i)}
           onContextMenu={(e) => handleContextMenu(e, i)}
           role="tab"
           aria-selected={i === activeIndex}
@@ -143,17 +157,7 @@ export function TabBar() {
               : "bg-[var(--color-bg3)] text-[var(--color-t2)] border border-transparent hover:bg-[var(--color-bgh)] hover:text-[var(--color-t1)]"
             }`}
         >
-          {/* Drag handle */}
-          <span
-            draggable
-            onDragStart={(e) => onDragStart(e, i)}
-            onDragEnd={onDragEnd}
-            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-[var(--color-t3)] hover:text-[var(--color-accent)] transition-colors"
-            aria-label={`Drag panel ${i + 1}`}
-            tabIndex={-1}
-          >
-            <GripVertical size={10} aria-hidden="true" />
-          </span>
+          <GripVertical size={10} className="text-[var(--color-t3)] flex-shrink-0" aria-hidden="true" />
 
           {/* Tab label with inline rename on double-click */}
           {editingIndex === i ? (

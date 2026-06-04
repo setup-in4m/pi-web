@@ -34,7 +34,10 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/icon.png"
+      "icons/icon.ico",
+      "icons/icon.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png"
     ],
     "publisher": "pi-web",
     "copyright": "Copyright (c) 2024-2026",

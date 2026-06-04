@@ -1,0 +1,9 @@
+node_modules/
+dist/
+tauri/target/
+.DS_Store
+*.log
+.env
+.env.local
+pi-web.db
+pi-web.db-journal

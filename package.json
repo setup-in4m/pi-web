@@ -1,0 +1,25 @@
+{
+  "name": "pi-web",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Desktop orchestration kit for pi coding agent — Tauri + React + Node",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w server && npm run build -w client",
+    "tauri": "cargo tauri dev",
+    "lint": "npm run lint -w client && npm run lint -w server",
+    "clean": "rm -rf client/dist server/dist"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.0"
+  }
+}

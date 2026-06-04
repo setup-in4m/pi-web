@@ -1,0 +1,15 @@
+{
+  "identifier": "default",
+  "description": "Default capability for pi-web",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-ask",
+    "global-shortcut:default",
+    "global-shortcut:allow-register",
+    "shell:default",
+    "shell:allow-open"
+  ]
+}

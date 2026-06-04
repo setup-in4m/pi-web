@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
+  "productName": "pi-web",
+  "version": "2.0.0",
+  "identifier": "com.pi-web.app",
+  "build": {
+    "beforeDevCommand": "npm run dev:server",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../client/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "pi",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 600,
+        "minHeight": 400,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:3456 ws://localhost:3456; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    }
+  },
+  "plugins": {
+    "dialog": {},
+    "global-shortcut": {},
+    "shell": {
+      "open": true
+    }
+  }
+}

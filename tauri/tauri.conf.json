@@ -25,7 +25,7 @@
       "csp": "default-src 'self'; connect-src 'self' http://localhost:3456 ws://localhost:3456; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
     },
     "trayIcon": {
-      "iconPath": "icons/icon.ico",
+      "iconPath": "icons/icon.png",
       "tooltip": "pi",
       "menuOnLeftClick": false
     }
@@ -34,7 +34,7 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/icon.ico"
+      "icons/icon.png"
     ],
     "publisher": "pi-web",
     "copyright": "Copyright (c) 2024-2026",

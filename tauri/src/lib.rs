@@ -1,6 +1,5 @@
 use tauri::{Emitter, Manager};
-use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
-use tauri::tray::TrayIconBuilder;
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct WindowBounds {
@@ -13,7 +12,6 @@ struct WindowBounds {
 
 const BOUNDS_FILE: &str = "window-bounds.json";
 const LOCK_FILE: &str = "pi-web.lock";
-const TRAY_ID: &str = "pi-web-tray";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -88,31 +86,10 @@ pub fn run() {
                 });
             }
 
-            // ── Global shortcuts ─────────────────────────────
+            // ── Global shortcuts (registered via plugin) ───────
             {
-                let w = window.clone();
-                let h = handle.clone();
-                if let Ok(gs) = app.global_shortcut() {
-                    // Ctrl+Shift+Space: show/hide window
-                    let _ = gs.register("Ctrl+Shift+Space", move || {
-                        if let Some(win) = h.get_webview_window("main") {
-                            if win.is_visible().unwrap_or(true) {
-                                let _ = win.hide();
-                            } else {
-                                let _ = win.show();
-                                let _ = win.set_focus();
-                            }
-                        }
-                    });
-                    // Ctrl+Shift+N: new session
-                    let _ = gs.register("Ctrl+Shift+N", move || {
-                        if let Some(win) = h.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                            let _ = win.emit("new-session", ());
-                        }
-                    });
-                }
+                app.global_shortcut().register("Ctrl+Shift+Space").ok();
+                app.global_shortcut().register("Ctrl+Shift+N").ok();
             }
 
             // ── Drag-drop folders onto window ─────────────────
@@ -120,86 +97,15 @@ pub fn run() {
                 let h = handle.clone();
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::DragDrop(e) = event {
-                        match e {
-                            tauri::DragDropEvent::Drop { paths, .. } => {
-                                for path in paths {
-                                    if path.is_dir() {
-                                        let _ = h.emit("folder-dropped", path.to_string_lossy().to_string());
-                                    }
+                        if let tauri::DragDropEvent::Drop { paths, .. } = e {
+                            for path in paths {
+                                if path.is_dir() {
+                                    let _ = h.emit("folder-dropped", path.to_string_lossy().to_string());
                                 }
                             }
-                            tauri::DragDropEvent::Hovered { paths, .. } => {
-                                for path in paths {
-                                    if path.is_dir() {
-                                        let _ = h.emit("folder-hover", path.to_string_lossy().to_string());
-                                    }
-                                }
-                            }
-                            _ => {}
                         }
                     }
                 });
-            }
-
-            // ── System tray ────────────────────────────────────
-            {
-                let w = window.clone();
-
-                let tray_menu = MenuBuilder::new(app)
-                    .item(&MenuItemBuilder::with_id("show_hide", "Show/Hide Window").build(app)?)
-                    .item(&PredefinedMenuItem::separator(app)?)
-                    .item(&MenuItemBuilder::with_id("new_session", "New Session").build(app)?)
-                    .item(&PredefinedMenuItem::separator(app)?)
-                    .item(&MenuItemBuilder::with_id("quit", "Quit").build(app)?)
-                    .build()?;
-
-                let tray_icon = find_tray_icon(&handle);
-
-                let _tray = TrayIconBuilder::new(TRAY_ID)
-                    .icon(tray_icon)
-                    .tooltip("pi")
-                    .menu(&tray_menu)
-                    .menu_on_left_click(false)
-                    .on_menu_event(move |app, event| {
-                        let id = event.id().as_ref();
-                        match id {
-                            "show_hide" => {
-                                if let Some(win) = app.get_webview_window("main") {
-                                    if win.is_visible().unwrap_or(true) {
-                                        let _ = win.hide();
-                                    } else {
-                                        let _ = win.show();
-                                        let _ = win.set_focus();
-                                    }
-                                }
-                            }
-                            "new_session" => {
-                                let _ = app.emit("new-session", ());
-                                if let Some(win) = app.get_webview_window("main") {
-                                    let _ = win.show();
-                                    let _ = win.set_focus();
-                                }
-                            }
-                            "quit" => app.exit(0),
-                            _ => {}
-                        }
-                    })
-                    .on_tray_icon_event(move |_tray, event| {
-                        if let tauri::tray::TrayIconEvent::Click {
-                            button: tauri::tray::MouseButton::Left,
-                            button_state: tauri::tray::MouseButtonState::Up,
-                            ..
-                        } = event
-                        {
-                            if w.is_visible().unwrap_or(true) {
-                                let _ = w.hide();
-                            } else {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
-                        }
-                    })
-                    .build(app)?;
             }
 
             Ok(())
@@ -224,23 +130,7 @@ fn get_decorations(window: tauri::WebviewWindow) -> Result<bool, String> {
     window.is_decorated().map_err(|e| e.to_string())
 }
 
-// ── Helpers ────────────────────────────────────────────────────
-
-fn find_tray_icon(handle: &tauri::AppHandle) -> tauri::tray::Icon {
-    let candidates: [Option<std::path::PathBuf>; 3] = [
-        handle.path().resource_dir().ok().map(|d| d.join("icons/icon.ico")),
-        Some(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("icons/icon.ico")),
-        std::env::current_dir().ok().map(|d| d.join("tauri/icons/icon.ico")),
-    ];
-
-    for path in candidates.into_iter().flatten() {
-        if path.exists() {
-            return tauri::tray::Icon::File(path);
-        }
-    }
-
-    tauri::tray::Icon::Raw(vec![])
-}
+// ── Platform Helpers ────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
 fn process_alive(pid: u32) -> bool {

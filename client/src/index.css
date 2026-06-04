@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 
 @theme {
   --color-bg: #0a0c12;
@@ -33,6 +34,64 @@
   --color-t1: #1a1d24;
   --color-t2: #5a6072;
   --color-t3: #949ab0;
+}
+
+/* Light code theme overrides */
+[data-code-theme="light"] .code-block-wrapper pre {
+  background: #f6f8fa !important;
+  color: #24292f;
+}
+[data-code-theme="light"] .code-block-wrapper .copy-btn {
+  color: #57606a !important;
+}
+[data-code-theme="light"] .code-block-wrapper .copy-btn:hover {
+  color: #1a1d24 !important;
+}
+[data-code-theme="light"] .code-block-wrapper > div:first-child {
+  background: #e8ecf2 !important;
+  border-color: #d0d7de !important;
+}
+[data-code-theme="light"] .code-block-wrapper pre code {
+  color: #24292f;
+}
+[data-code-theme="light"] .hljs-keyword,
+[data-code-theme="light"] .hljs-selector-tag,
+[data-code-theme="light"] .hljs-literal,
+[data-code-theme="light"] .hljs-section,
+[data-code-theme="light"] .hljs-link {
+  color: #d73a49;
+}
+[data-code-theme="light"] .hljs-string,
+[data-code-theme="light"] .hljs-title,
+[data-code-theme="light"] .hljs-name,
+[data-code-theme="light"] .hljs-type,
+[data-code-theme="light"] .hljs-attribute,
+[data-code-theme="light"] .hljs-symbol,
+[data-code-theme="light"] .hljs-bullet,
+[data-code-theme="light"] .hljs-addition,
+[data-code-theme="light"] .hljs-variable,
+[data-code-theme="light"] .hljs-template-tag,
+[data-code-theme="light"] .hljs-template-variable {
+  color: #6f42c1;
+}
+[data-code-theme="light"] .hljs-comment,
+[data-code-theme="light"] .hljs-quote,
+[data-code-theme="light"] .hljs-deletion,
+[data-code-theme="light"] .hljs-meta {
+  color: #6a737d;
+}
+[data-code-theme="light"] .hljs-number,
+[data-code-theme="light"] .hljs-regexp,
+[data-code-theme="light"] .hljs-literal,
+[data-code-theme="light"] .hljs-built_in {
+  color: #005cc5;
+}
+[data-code-theme="light"] .hljs-attr,
+[data-code-theme="light"] .hljs-params {
+  color: #e36209;
+}
+[data-code-theme="light"] .hljs-function .hljs-title {
+  color: #6f42c1;
 }
 
 html,

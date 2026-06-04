@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import katex from "katex";
 import hljs from "highlight.js/lib/core";
 import javascript from "highlight.js/lib/languages/javascript";
 import typescript from "highlight.js/lib/languages/typescript";
@@ -188,11 +189,32 @@ export function renderMarkdown(text: string): string {
     if (oldestKey) cache.delete(oldestKey);
   }
 
+  // Pre-process math: $$...$$ (display) and $...$ (inline)
+  let processed = text;
+  try {
+    // Display math: $$...$$
+    processed = processed.replace(/\$\$([\s\S]*?)\$\$/g, (_: string, formula: string) => {
+      try {
+        return katex.renderToString(formula.trim(), { displayMode: true, throwOnError: false });
+      } catch {
+        return `<pre class="math-block">${escapeHtml(formula.trim())}</pre>`;
+      }
+    });
+    // Inline math: $...$ (but not $$)
+    processed = processed.replace(/(?<!\$)\$(?!\$)([^\$\n]+?)\$(?!\$)/g, (_: string, formula: string) => {
+      try {
+        return katex.renderToString(formula.trim(), { displayMode: false, throwOnError: false });
+      } catch {
+        return `<code class="math-inline">${escapeHtml(formula.trim())}</code>`;
+      }
+    });
+  } catch { /* keep original text if math processing fails */ }
+
   let result: string;
   try {
-    result = marked.parse(text) as string;
+    result = marked.parse(processed) as string;
   } catch {
-    result = escapeHtml(text).replace(/\n/g, "<br>");
+    result = escapeHtml(processed).replace(/\n/g, "<br>");
   }
 
   cache.set(text, { result, ts: Date.now() });

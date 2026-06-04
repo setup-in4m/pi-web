@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Settings, Sun, Moon, Monitor, Palette, Type, User, Plus, Trash2, Pencil, RotateCcw, Database, Download, Trash, Zap } from "lucide-react";
-import { useThemeStore, type ThemeMode, type AccentColor, ACCENT_MAP, type Density } from "../../stores/themeStore";
+import { X, Settings, Sun, Moon, Monitor, Palette, Type, User, Plus, Trash2, Pencil, RotateCcw, Database, Download, Trash, Zap, Code } from "lucide-react";
+import { useThemeStore, type ThemeMode, type AccentColor, ACCENT_MAP, type Density, type FontFamily, type CodeTheme, FONT_MAP } from "../../stores/themeStore";
 import { useProfileStore } from "../../stores/profileStore";
 import { useModelStore } from "../../stores/modelStore";
 import { useSettingsStore, DEFAULT_KEYBINDINGS } from "../../stores/settingsStore";
@@ -164,7 +164,7 @@ function DataTab() {
 }
 
 export function SettingsDialog({ open, onClose }: Props) {
-  const { mode, accent, density, fontScale, setMode, setAccent, setDensity, setFontScale } = useThemeStore();
+  const { mode, accent, density, fontScale, fontFamily, codeTheme, setMode, setAccent, setDensity, setFontScale, setFontFamily, setCodeTheme } = useThemeStore();
   const { profiles, addProfile, removeProfile } = useProfileStore();
   const { models } = useModelStore();
   const [newProfileName, setNewProfileName] = useState("");
@@ -328,6 +328,45 @@ export function SettingsDialog({ open, onClose }: Props) {
                   onChange={(e) => setFontScale(parseFloat(e.target.value))}
                   className="w-full h-1.5 rounded-full appearance-none bg-[var(--color-bd)] outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--color-accent)] [&::-webkit-slider-thumb]:cursor-pointer"
                 />
+              </div>
+
+              {/* Font family */}
+              <div>
+                <div className="text-[11px] font-medium text-[var(--color-t2)] mb-2">
+                  <Type size={12} className="inline mr-1" />
+                  Editor Font
+                </div>
+                <select
+                  value={fontFamily}
+                  onChange={(e) => setFontFamily(e.target.value as FontFamily)}
+                  className="w-full bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-2 py-1.5 text-[11px] font-sans cursor-pointer outline-none focus:border-[var(--color-accent)]"
+                >
+                  {(Object.entries(FONT_MAP) as [FontFamily, { name: string; css: string }][]).map(([key, def]) => (
+                    <option key={key} value={key}>{def.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Code theme */}
+              <div>
+                <div className="text-[11px] font-medium text-[var(--color-t2)] mb-2">
+                  <Code size={12} className="inline mr-1" />
+                  Code Theme
+                </div>
+                <div className="flex gap-2">
+                  {([
+                    { value: "dark" as CodeTheme, label: "Dark" },
+                    { value: "light" as CodeTheme, label: "Light" },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setCodeTheme(opt.value)}
+                      className={`px-3 py-1.5 rounded-lg border text-[11px] transition-colors ${codeTheme === opt.value ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]" : "border-[var(--color-bd)] text-[var(--color-t2)] hover:border-[var(--color-bdl)]"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}

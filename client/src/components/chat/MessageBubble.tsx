@@ -10,6 +10,14 @@ interface Props {
 const USER_AVATAR = "U";
 const ASSISTANT_AVATAR = "π";
 
+/** Estimate tokens from plain text content (chars / 4) */
+function estimateTokens(content: string): number {
+  const div = document.createElement("div");
+  div.innerHTML = content;
+  const plain = (div.textContent || div.innerText || content).trim();
+  return Math.max(1, Math.round(plain.length / 4));
+}
+
 export function MessageBubble({ message, streaming }: Props) {
   const isUser = message.role === "user";
   const formatted = useMemo(() => {
@@ -54,6 +62,12 @@ export function MessageBubble({ message, streaming }: Props) {
           </span>
           <span className="text-[7px] text-[var(--color-t3)]">
             {formatTime(message.timestamp)}
+          </span>
+          <span
+            className="text-[7px] text-[var(--color-t3)]/0 hover:text-[var(--color-t3)] transition-colors cursor-help flex-shrink-0"
+            title={`~${estimateTokens(message.content).toLocaleString()} tokens`}
+          >
+            ~{estimateTokens(message.content).toLocaleString()} tok
           </span>
         </div>
 

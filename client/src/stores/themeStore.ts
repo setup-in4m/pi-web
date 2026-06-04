@@ -3,6 +3,17 @@ import { create } from "zustand";
 export type ThemeMode = "dark" | "light" | "system";
 export type Density = "compact" | "normal" | "comfortable";
 export type AccentColor = "purple" | "blue" | "green" | "orange" | "pink" | "teal";
+export type CodeTheme = "dark" | "light";
+export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "cascadia-code";
+
+export const FONT_MAP: Record<FontFamily, { name: string; css: string }> = {
+  system: { name: "System", css: "JetBrains Mono, Fira Code, monospace" },
+  jetbrains: { name: "JetBrains Mono", css: '"JetBrains Mono", monospace' },
+  "fira-code": { name: "Fira Code", css: '"Fira Code", monospace' },
+  "source-code-pro": { name: "Source Code Pro", css: '"Source Code Pro", monospace' },
+  "ibm-plex-mono": { name: "IBM Plex Mono", css: '"IBM Plex Mono", monospace' },
+  "cascadia-code": { name: "Cascadia Code", css: '"Cascadia Code", monospace' },
+};
 
 export interface AccentDef {
   name: string;
@@ -25,11 +36,15 @@ interface ThemeState {
   accent: AccentColor;
   density: Density;
   fontScale: number;
+  fontFamily: FontFamily;
+  codeTheme: CodeTheme;
 
   setMode: (mode: ThemeMode) => void;
   setAccent: (accent: AccentColor) => void;
   setDensity: (density: Density) => void;
   setFontScale: (scale: number) => void;
+  setFontFamily: (font: FontFamily) => void;
+  setCodeTheme: (theme: CodeTheme) => void;
 
   // Derived
   resolvedMode: () => "dark" | "light";
@@ -40,10 +55,10 @@ function loadTheme() {
     const raw = localStorage.getItem("pi-web-theme");
     if (raw) return JSON.parse(raw);
   } catch {}
-  return { mode: "dark" as ThemeMode, accent: "purple" as AccentColor, density: "normal" as Density, fontScale: 1 };
+  return { mode: "dark" as ThemeMode, accent: "purple" as AccentColor, density: "normal" as Density, fontScale: 1, fontFamily: "system" as FontFamily, codeTheme: "dark" as CodeTheme };
 }
 
-function persist(s: { mode: ThemeMode; accent: AccentColor; density: Density; fontScale: number }) {
+function persist(s: { mode: ThemeMode; accent: AccentColor; density: Density; fontScale: number; fontFamily: FontFamily; codeTheme: CodeTheme }) {
   localStorage.setItem("pi-web-theme", JSON.stringify(s));
 }
 
@@ -51,7 +66,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
   const initial = loadTheme();
 
   // Apply theme to document
-  applyTheme(initial.mode, initial.accent, initial.density, initial.fontScale);
+  applyTheme(initial.mode, initial.accent, initial.density, initial.fontScale, initial.fontFamily, initial.codeTheme);
 
   return {
     ...initial,
@@ -67,35 +82,51 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     setMode: (mode) => {
       set({ mode });
       const s = get();
-      applyTheme(mode, s.accent, s.density, s.fontScale);
-      persist({ mode, accent: s.accent, density: s.density, fontScale: s.fontScale });
+      applyTheme(mode, s.accent, s.density, s.fontScale, s.fontFamily, s.codeTheme);
+      persist({ mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, codeTheme: s.codeTheme });
     },
 
     setAccent: (accent) => {
       set({ accent });
       const s = get();
-      applyTheme(s.mode, accent, s.density, s.fontScale);
-      persist({ mode: s.mode, accent, density: s.density, fontScale: s.fontScale });
+      applyTheme(s.mode, accent, s.density, s.fontScale, s.fontFamily, s.codeTheme);
+      persist({ mode: s.mode, accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, codeTheme: s.codeTheme });
     },
 
     setDensity: (density) => {
       set({ density });
       const s = get();
-      applyTheme(s.mode, s.accent, density, s.fontScale);
+      applyTheme(s.mode, s.accent, density, s.fontScale, s.fontFamily, s.codeTheme);
       document.documentElement.setAttribute("data-density", density);
-      persist({ mode: s.mode, accent: s.accent, density, fontScale: s.fontScale });
+      persist({ mode: s.mode, accent: s.accent, density, fontScale: s.fontScale, fontFamily: s.fontFamily, codeTheme: s.codeTheme });
     },
 
     setFontScale: (fontScale) => {
       set({ fontScale });
       const s = get();
       document.documentElement.style.fontSize = `${13 * fontScale}px`;
-      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale });
+      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale, fontFamily: s.fontFamily, codeTheme: s.codeTheme });
+    },
+
+    setFontFamily: (fontFamily) => {
+      set({ fontFamily });
+      const s = get();
+      const font = FONT_MAP[fontFamily];
+      document.documentElement.style.setProperty("--font-mono", font.css);
+      applyCodeTheme(s.codeTheme);
+      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily, codeTheme: s.codeTheme });
+    },
+
+    setCodeTheme: (codeTheme) => {
+      set({ codeTheme });
+      const s = get();
+      applyCodeTheme(codeTheme);
+      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, codeTheme });
     },
   };
 });
 
-function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, fontScale: number) {
+function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, fontScale: number, fontFamily: FontFamily, codeTheme: CodeTheme) {
   const acc = ACCENT_MAP[accent];
   const resolved = mode === "system"
     ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
@@ -105,10 +136,25 @@ function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, font
   document.documentElement.setAttribute("data-density", density);
   document.documentElement.style.fontSize = `${13 * fontScale}px`;
 
+  // Font family
+  const font = FONT_MAP[fontFamily];
+  document.documentElement.style.setProperty("--font-mono", font.css);
+
+  // Code theme
+  applyCodeTheme(codeTheme);
+
   // CSS custom properties for accent
   document.documentElement.style.setProperty("--color-accent", acc.color);
   document.documentElement.style.setProperty("--color-accent-hover", acc.hover);
   document.documentElement.style.setProperty("--color-accent-glow", acc.glow);
+}
+
+function applyCodeTheme(theme: CodeTheme) {
+  if (theme === "light") {
+    document.documentElement.setAttribute("data-code-theme", "light");
+  } else {
+    document.documentElement.removeAttribute("data-code-theme");
+  }
 }
 
 // Listen for system theme changes
@@ -116,7 +162,7 @@ if (typeof window !== "undefined") {
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     const state = useThemeStore.getState();
     if (state.mode === "system") {
-      applyTheme("system", state.accent, state.density, state.fontScale);
+      applyTheme("system", state.accent, state.density, state.fontScale, state.fontFamily, state.codeTheme);
     }
   });
 }

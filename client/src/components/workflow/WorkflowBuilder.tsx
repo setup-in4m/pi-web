@@ -10,7 +10,6 @@ export function WorkflowBuilder() {
   const { models, providers } = useModelStore();
   const addToast = useToastStore((s) => s.addToast);
   const panels = usePanelStore((s) => s.panels);
-  const spawnFromPanel = usePanelStore((s) => s.spawnFromPanel);
 
   if (!open) return null;
 
@@ -28,41 +27,12 @@ export function WorkflowBuilder() {
     }
 
     setOpen(false);
-    const sourceIdx = 0;
 
-    if (mode === "parallel") {
-      // Run all steps simultaneously in separate panels
-      for (const step of validSteps) {
-        spawnFromPanel(sourceIdx);
+    // Group consecutive parallel steps and run them together, chain otherwise
+    const groups = groupSteps(validSteps);
+    addToast(`Running workflow: ${groups.map(g => g.length > 1 ? `${g.length}∥` : "1→").join(" · ")}`, "success");
 
-        // Find the new panel (last one added)
-        const newIdx = usePanelStore.getState().panels.length - 1;
-
-        // Set model if specified
-        if (step.model) {
-          usePanelStore.getState().setModel(newIdx, step.model.provider, step.model.modelId);
-        }
-
-        try {
-          const result = await api.createSession(workspacePath, step.prompt.slice(0, 40));
-          usePanelStore.setState((s) => ({
-            panels: s.panels.map((p, i) =>
-              i === newIdx ? { ...p, sessionKey: result.key, sessionId: result.sessionId, title: result.title } : p
-            ),
-          }));
-          await api.setModel(result.key, step.model?.provider || "", step.model?.modelId || "");
-          await api.sendMessage(result.key, step.prompt);
-        } catch (e: any) {
-          addToast(e.message, "error");
-        }
-      }
-    } else {
-      // Chain mode: run sequentially, each output feeds next
-      addToast(`Running ${validSteps.length} steps in chain…`, "success");
-
-      // Run steps sequentially using a background flow
-      runChain(workspacePath, validSteps, addToast);
-    }
+    runMixedWorkflow(workspacePath, groups, addToast);
   };
 
   return (
@@ -118,9 +88,13 @@ export function WorkflowBuilder() {
           {steps.map((step, i) => (
             <div key={step.id} className="relative">
               {/* Step connector */}
-              {mode === "chain" && i > 0 && (
+              {i > 0 && (
                 <div className="flex items-center justify-center -mt-1.5 mb-0.5">
-                  <ArrowDown size={14} className="text-[var(--color-t3)]" />
+                  {step.isParallel && steps[i-1]?.isParallel ? (
+                    <ArrowLeftRight size={14} className="text-[var(--color-accent)]" />
+                  ) : (
+                    <ArrowDown size={14} className="text-[var(--color-t3)]" />
+                  )}
                 </div>
               )}
 
@@ -130,8 +104,22 @@ export function WorkflowBuilder() {
                 </span>
 
                 <div className="flex-1 flex flex-col gap-2">
-                  {/* Model selector */}
+                  {/* Parallel toggle + model + thinking */}
                   <div className="flex gap-1.5">
+                    {/* Parallel toggle */}
+                    <button
+                      onClick={() => updateStep(step.id, { isParallel: !step.isParallel })}
+                      className={`px-1.5 py-1 rounded text-[9px] font-medium transition-colors border flex-shrink-0 ${
+                        step.isParallel
+                          ? "bg-[var(--color-accent)]/15 border-[var(--color-accent)] text-[var(--color-accent)]"
+                          : "bg-[var(--color-bg)] border-[var(--color-bd)] text-[var(--color-t3)] hover:border-[var(--color-bdl)]"
+                      }`}
+                      title={step.isParallel ? "Runs in parallel with adjacent ∥ steps" : "Runs sequentially"}
+                    >
+                      {step.isParallel ? "∥" : "→"}
+                    </button>
+
+                    {/* Model selector */}
                     <select
                       value={step.model ? `${step.model.provider}/${step.model.modelId}` : ""}
                       onChange={(e) => {
@@ -217,7 +205,7 @@ export function WorkflowBuilder() {
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[var(--color-accent)] text-white text-[11px] font-medium hover:bg-[var(--color-accent-hover)] disabled:opacity-25 transition-colors"
           >
             <Play size={12} />
-            Run {mode === "chain" ? "Chain" : "Parallel"}
+            Run Workflow
           </button>
         </div>
       </div>
@@ -225,68 +213,108 @@ export function WorkflowBuilder() {
   );
 }
 
-// ── Chain execution helper ─────────────────────────────
+// ── Mixed chain+parallel execution ────────────────────────
 
-async function runChain(
+function groupSteps(
+  steps: import("../../stores/workflowStore").WorkflowStep[]
+): import("../../stores/workflowStore").WorkflowStep[][] {
+  const groups: import("../../stores/workflowStore").WorkflowStep[][] = [];
+  let current: import("../../stores/workflowStore").WorkflowStep[] = [];
+  for (const step of steps) {
+    if (current.length === 0 || step.isParallel === current[0].isParallel) {
+      current.push(step);
+    } else {
+      groups.push(current);
+      current = [step];
+    }
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
+
+async function runMixedWorkflow(
   workspacePath: string,
-  steps: import("../../stores/workflowStore").WorkflowStep[],
+  groups: import("../../stores/workflowStore").WorkflowStep[][],
   addToast: (msg: string, type: "success" | "error" | "warning") => void
 ) {
   let contextPrompt = "";
+  let stepNum = 0;
 
-  for (let i = 0; i < steps.length; i++) {
-    const step = steps[i];
+  for (const group of groups) {
+    stepNum++;
+    const isParallel = group.length > 1;
 
-    // Build prompt with context from previous step
-    const fullPrompt = i === 0
-      ? step.prompt
-      : `Previous step output:\n\n${contextPrompt}\n\n---\n\nYour task:\n${step.prompt}`;
+    if (isParallel) {
+      // Run all steps in parallel, each in its own panel
+      const results: Promise<string | null>[] = group.map(async (step) => {
+        try {
+          const fullPrompt = contextPrompt
+            ? `Context from previous step:\n${contextPrompt}\n\n---\n\n${step.prompt}`
+            : step.prompt;
+          const result = await api.createSession(workspacePath, `∥${stepNum}: ${step.prompt.slice(0, 30)}`);
+          if (step.model) await api.setModel(result.key, step.model.provider, step.model.modelId);
 
-    try {
-      // Create session
-      const result = await api.createSession(workspacePath, `Step ${i + 1}: ${step.prompt.slice(0, 30)}`);
-      if (step.model) {
-        await api.setModel(result.key, step.model.provider, step.model.modelId);
+          const state = usePanelStore.getState();
+          state.spawnFromPanel(0);
+          await new Promise((r) => setTimeout(r, 100));
+
+          const newIdx = usePanelStore.getState().panels.length - 1;
+          usePanelStore.setState((s) => ({
+            panels: s.panels.map((p, idx) =>
+              idx === newIdx ? { ...p, workspacePath, sessionKey: result.key, sessionId: result.sessionId, title: `∥${stepNum}`, model: step.model || null, thinking: step.thinking, messages: [{ role: "user", content: fullPrompt, timestamp: new Date().toISOString() }], streaming: true } : p
+            ),
+          }));
+          await api.sendMessage(result.key, fullPrompt);
+          await waitForCompletion(result.key);
+          const transcript = await api.getTranscript(result.key);
+          const last = [...transcript.transcript].reverse().find((m: any) => m.role === "assistant");
+          if (last) {
+            const div = document.createElement("div");
+            div.innerHTML = last.content;
+            return (div.textContent || "").trim();
+          }
+          return null;
+        } catch (e: any) {
+          addToast(`Parallel step failed: ${e.message}`, "error");
+          return null;
+        }
+      });
+
+      const outputs = await Promise.all(results);
+      contextPrompt = outputs.filter(Boolean).join("\n\n---\n\n");
+    } else {
+      // Single step (chain)
+      const step = group[0];
+      try {
+        const fullPrompt = contextPrompt
+          ? `Previous step output:\n${contextPrompt}\n\n---\n\n${step.prompt}`
+          : step.prompt;
+        const result = await api.createSession(workspacePath, `→${stepNum}: ${step.prompt.slice(0, 30)}`);
+        if (step.model) await api.setModel(result.key, step.model.provider, step.model.modelId);
+
+        const state = usePanelStore.getState();
+        state.spawnFromPanel(0);
+        await new Promise((r) => setTimeout(r, 100));
+
+        const newIdx = usePanelStore.getState().panels.length - 1;
+        usePanelStore.setState((s) => ({
+          panels: s.panels.map((p, idx) =>
+            idx === newIdx ? { ...p, workspacePath, sessionKey: result.key, sessionId: result.sessionId, title: `→${stepNum}`, model: step.model || null, thinking: step.thinking, messages: [{ role: "user", content: fullPrompt, timestamp: new Date().toISOString() }], streaming: true } : p
+          ),
+        }));
+        await api.sendMessage(result.key, fullPrompt);
+        await waitForCompletion(result.key);
+        const transcript = await api.getTranscript(result.key);
+        const last = [...transcript.transcript].reverse().find((m: any) => m.role === "assistant");
+        if (last) {
+          const div = document.createElement("div");
+          div.innerHTML = last.content;
+          contextPrompt = (div.textContent || "").trim();
+        }
+      } catch (e: any) {
+        addToast(`Step ${stepNum} failed: ${e.message}`, "error");
+        break;
       }
-
-      // Open the session in a new panel
-      const state = usePanelStore.getState();
-      state.spawnFromPanel(0);
-      await new Promise((r) => setTimeout(r, 100));
-
-      const newIdx = usePanelStore.getState().panels.length - 1;
-      usePanelStore.setState((s) => ({
-        panels: s.panels.map((p, idx) =>
-          idx === newIdx ? {
-            ...p,
-            workspacePath,
-            sessionKey: result.key,
-            sessionId: result.sessionId,
-            title: `Step ${i + 1}`,
-            model: step.model || null,
-            thinking: step.thinking,
-            messages: [{ role: "user", content: fullPrompt, timestamp: new Date().toISOString() }],
-            streaming: true,
-          } : p
-        ),
-      }));
-
-      await api.sendMessage(result.key, fullPrompt);
-
-      // Wait for step to complete by polling
-      await waitForCompletion(result.key);
-
-      // Get the output for next step
-      const transcript = await api.getTranscript(result.key);
-      const lastAssistant = [...transcript.transcript].reverse().find((m: any) => m.role === "assistant");
-      if (lastAssistant) {
-        const div = document.createElement("div");
-        div.innerHTML = lastAssistant.content;
-        contextPrompt = (div.textContent || div.innerText || lastAssistant.content).trim();
-      }
-    } catch (e: any) {
-      addToast(`Step ${i + 1} failed: ${e.message}`, "error");
-      break;
     }
   }
 

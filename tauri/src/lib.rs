@@ -26,6 +26,56 @@ pub fn run() {
             let window = app.get_webview_window("main").unwrap();
             let handle = app.handle().clone();
 
+            // ── Start Node.js backend server ──────────────────
+            let server_handle = std::thread::spawn({
+                let handle = handle.clone();
+                let window = window.clone();
+                move || {
+                    // Find the bundled server directory
+                    let server_dir = handle.path().resource_dir()
+                        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                        .join("server");
+
+                    let server_entry = server_dir.join("index.js");
+
+                    if server_entry.exists() {
+                        println!("Starting Node server from: {}", server_entry.display());
+                        let child = std::process::Command::new("node")
+                            .arg(&server_entry)
+                            .current_dir(&server_dir.parent().unwrap_or(&server_dir))
+                            .stdout(std::process::Stdio::piped())
+                            .stderr(std::process::Stdio::piped())
+                            .spawn();
+
+                        if let Ok(mut child) = child {
+                            // Poll until server is ready using TCP connect
+                            use std::net::TcpStream;
+                            for _ in 0..30 {
+                                if TcpStream::connect("127.0.0.1:3456").is_ok() {
+                                    println!("Server ready");
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                    // Keep child alive
+                                    let _ = child.wait();
+                                    return;
+                                }
+                                std::thread::sleep(std::time::Duration::from_millis(500));
+                            }
+                            println!("Server failed to start, killing child");
+                            let _ = child.kill();
+                        }
+                    } else {
+                        println!("Server not found at {}, running standalone (dev mode)", server_entry.display());
+                        // Show window anyway for dev
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            });
+
+            // Don't join — let the thread run independently
+            std::mem::forget(server_handle);
+
             #[cfg(debug_assertions)]
             window.open_devtools();
 

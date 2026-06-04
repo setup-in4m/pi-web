@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { usePanelStore } from "../../stores/panelStore";
 import { useLayoutStore, type LayoutPreset } from "../../stores/layoutStore";
 import { useModelStore } from "../../stores/modelStore";
-import { Plus, X, GripVertical, Square, Columns2, Rows2, Grid2x2, Columns3 } from "lucide-react";
+import { useWorkflowStore } from "../../stores/workflowStore";
+import { Plus, X, GripVertical, Square, Columns2, Rows2, Grid2x2, Columns3, Workflow } from "lucide-react";
 
 const LAYOUT_OPTIONS: { preset: LayoutPreset; icon: typeof Square; label: string }[] = [
   { preset: "single", icon: Square, label: "Single panel" },
@@ -25,6 +26,7 @@ export function TabBar() {
   const closeAllPanels = usePanelStore((s) => s.closeAllPanels);
   const { preset, setPreset } = useLayoutStore();
   const { models, providers } = useModelStore();
+  const { open: workflowOpen, setOpen: setWorkflowOpen } = useWorkflowStore();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
 
@@ -114,6 +116,16 @@ export function TabBar() {
 
       {/* Layout presets */}
       <div className="ml-auto flex items-center gap-0.5 flex-shrink-0" role="toolbar" aria-label="Layout presets">
+        {/* Workflow builder button */}
+        <button
+          onClick={() => setWorkflowOpen(true)}
+          className={`p-0.5 rounded transition-colors ${workflowOpen ? "text-[var(--color-accent)] bg-[var(--color-bga)]" : "text-[var(--color-t3)] hover:text-[var(--color-t2)] hover:bg-[var(--color-bgh)]"}`}
+          title="Workflow Builder"
+          aria-label="Open workflow builder"
+        >
+          <Workflow size={14} />
+        </button>
+        <div className="w-px h-3 bg-[var(--color-bd)] mx-0.5" />
         {LAYOUT_OPTIONS.map((opt) => {
           const Icon = opt.icon;
           return (

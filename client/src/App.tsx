@@ -10,6 +10,7 @@ import { useKeyboard } from "./hooks/useKeyboard";
 // Code-split heavy dialog components
 const SettingsDialog = lazy(() => import("./components/settings/SettingsDialog").then(m => ({ default: m.SettingsDialog })));
 const CommandPalette = lazy(() => import("./components/CommandPalette").then(m => ({ default: m.CommandPalette })));
+const WorkflowBuilder = lazy(() => import("./components/workflow/WorkflowBuilder").then(m => ({ default: m.WorkflowBuilder })));
 
 // Inline fallback for lazy components
 function LazyFallback() {
@@ -47,4 +48,4 @@ export default function App() {
 }
 
 // Re-export lazy components for AppShell to use via Suspense
-export { SettingsDialog, CommandPalette, LazyFallback };
+export { SettingsDialog, CommandPalette, WorkflowBuilder, LazyFallback };

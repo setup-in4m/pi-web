@@ -14,7 +14,7 @@ import {
   getDecorations,
   listenForTauriEvent,
 } from "../../lib/tauri";
-import { SettingsDialog, CommandPalette, LazyFallback } from "../../App";
+import { SettingsDialog, CommandPalette, WorkflowBuilder, LazyFallback } from "../../App";
 
 export function AppShell() {
   const sidebarVisible = useLayoutStore((s) => s.sidebarVisible);
@@ -110,6 +110,9 @@ export function AppShell() {
       <ToastContainer />
       <Suspense fallback={<LazyFallback />}>
         <CommandPalette />
+      </Suspense>
+      <Suspense fallback={<LazyFallback />}>
+        <WorkflowBuilder />
       </Suspense>
       <Suspense fallback={<LazyFallback />}>
         <SettingsDialog

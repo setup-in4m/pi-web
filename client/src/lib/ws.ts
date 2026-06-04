@@ -39,8 +39,13 @@ export function isConnected(): boolean {
 export function connect(): void {
   if (ws && ws.readyState === WebSocket.OPEN) return;
 
-  const protocol = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${protocol}://${location.host}/ws`);
+  // In production (Tauri), connect to the Node server directly.
+  // In dev, use the current host (Vite proxies /ws).
+  const wsUrl = import.meta.env.DEV
+    ? `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`
+    : `ws://localhost:3456/ws`;
+
+  ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
     _connected = true;

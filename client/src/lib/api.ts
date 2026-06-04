@@ -1,4 +1,6 @@
-const BASE = "";
+// In production (Tauri), connect to the Node server on localhost.
+// In dev, Vite proxies /api to the server so BASE is empty.
+const BASE = import.meta.env.DEV ? "" : "http://localhost:3456";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, {

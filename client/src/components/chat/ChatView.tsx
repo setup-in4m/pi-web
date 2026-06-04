@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, Copy, Pencil, SendHorizontal, GitFork, Bot } from "lucide-react";
+import { ArrowDown, Copy, Pencil, SendHorizontal, GitFork, Bot, Pin } from "lucide-react";
 import type { PanelData } from "../../stores/panelStore";
 import { usePanelStore } from "../../stores/panelStore";
 import { MessageBubble } from "./MessageBubble";
@@ -21,6 +21,8 @@ export function ChatView({ panel }: Props) {
   const panels = usePanelStore((s) => s.panels);
   const branchFromMessage = usePanelStore((s) => s.branchFromMessage);
   const spawnSubAgent = usePanelStore((s) => s.spawnSubAgent);
+  const pinMessage = usePanelStore((s) => s.pinMessage);
+  const unpinMessage = usePanelStore((s) => s.unpinMessage);
   const addToast = useToastStore((s) => s.addToast);
 
   const virtualizer = useVirtualizer({
@@ -35,6 +37,28 @@ export function ChatView({ panel }: Props) {
     shouldAutoScroll.current = true;
     setShowScrollBtn(false);
   }, [virtualizer, panel.messages.length]);
+
+  // aria-live announcements for screen readers
+  const [liveAnnouncement, setLiveAnnouncement] = useState("");
+  const prevStreaming = useRef(panel.streaming);
+  const prevMsgCount = useRef(panel.messages.length);
+
+  useEffect(() => {
+    if (panel.streaming && !prevStreaming.current) {
+      setLiveAnnouncement("New message from pi");
+    } else if (!panel.streaming && prevStreaming.current) {
+      setLiveAnnouncement("Message complete");
+    } else if (panel.messages.length > prevMsgCount.current && !panel.streaming) {
+      // User sent a message
+      setLiveAnnouncement("Message sent");
+    } else {
+      // Clear announcement after a beat so it can be re-read
+      const timer = setTimeout(() => setLiveAnnouncement(""), 100);
+      return () => clearTimeout(timer);
+    }
+    prevStreaming.current = panel.streaming;
+    prevMsgCount.current = panel.messages.length;
+  }, [panel.streaming, panel.messages.length]);
 
   // Auto-scroll when streaming
   useEffect(() => {
@@ -118,8 +142,41 @@ export function ChatView({ panel }: Props) {
   }
 
   return (
-    <div className="flex-1 relative min-h-0">
+    <div className="flex-1 relative min-h-0" role="log" aria-label="Chat messages">
+      {/* Screen-reader live region */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only" role="status">
+        {liveAnnouncement}
+      </div>
       <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 overflow-y-auto">
+        {/* Pinned messages */}
+        {panel.pinnedIndices && panel.pinnedIndices.length > 0 && (
+          <div className="sticky top-0 z-10 bg-[var(--color-bg)]/95 backdrop-blur-sm border-b border-[var(--color-accent)]/30 px-3 py-1.5 mb-1">
+            <div className="text-[9px] text-[var(--color-t3)] uppercase tracking-wider mb-1 flex items-center gap-1">
+              <Pin size={9} />
+              Pinned ({panel.pinnedIndices.length})
+            </div>
+            {panel.pinnedIndices.map((idx) => {
+              const msg = panel.messages[idx];
+              if (!msg) return null;
+              return (
+                <div key={idx} className="relative group/pinned mb-1">
+                  <MessageBubble message={msg} />
+                  <button
+                    onClick={() => {
+                      const panelIdx = panels.indexOf(panel);
+                      if (panelIdx >= 0) unpinMessage(panelIdx, idx);
+                    }}
+                    className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--color-bg2)] border border-[var(--color-bd)] flex items-center justify-center opacity-0 group-hover/pinned:opacity-100 transition-opacity hover:border-[var(--color-danger)]"
+                    title="Unpin"
+                  >
+                    <span className="text-[8px] leading-none">✕</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Virtualized message list */}
         <div
           style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}
@@ -179,16 +236,18 @@ export function ChatView({ panel }: Props) {
                         onClick={() => handleCopyMessage(msg.content)}
                         className="p-0.5 rounded text-[var(--color-t3)] hover:text-[var(--color-t1)] hover:bg-[var(--color-bgh)] transition-colors"
                         title="Copy message"
+                        aria-label="Copy message"
                       >
-                        <Copy size={11} />
+                        <Copy size={11} aria-hidden="true" />
                       </button>
                       {msg.role === "user" && (
                         <button
                           onClick={() => handleEditMessage(i, msg.content)}
                           className="p-0.5 rounded text-[var(--color-t3)] hover:text-[var(--color-t1)] hover:bg-[var(--color-bgh)] transition-colors"
                           title="Edit and resend"
+                          aria-label="Edit and resend message"
                         >
-                          <Pencil size={11} />
+                          <Pencil size={11} aria-hidden="true" />
                         </button>
                       )}
                       {msg.role === "assistant" && panels.length > 1 && !panel.streaming && (
@@ -211,8 +270,9 @@ export function ChatView({ panel }: Props) {
                           }}
                           className="p-0.5 rounded text-[var(--color-t3)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bgh)] transition-colors"
                           title="Send to next panel"
+                          aria-label="Send to next panel"
                         >
-                          <SendHorizontal size={11} />
+                          <SendHorizontal size={11} aria-hidden="true" />
                         </button>
                       )}
                       {/* Branch button — appears on any message, forks from this point */}
@@ -223,8 +283,9 @@ export function ChatView({ panel }: Props) {
                         }}
                         className="p-0.5 rounded text-[var(--color-t3)] hover:text-[var(--color-warning)] hover:bg-[var(--color-bgh)] transition-colors"
                         title="Branch from here"
+                        aria-label="Branch from this message"
                       >
-                        <GitFork size={11} />
+                        <GitFork size={11} aria-hidden="true" />
                       </button>
                       {/* Sub-agent button — spawns sub-agent on this message content */}
                       {msg.role === "assistant" && panel.sessionKey && (
@@ -239,10 +300,32 @@ export function ChatView({ panel }: Props) {
                           }}
                           className="p-0.5 rounded text-[var(--color-t3)] hover:text-[#3b82f6] hover:bg-[var(--color-bgh)] transition-colors"
                           title="Spawn sub-agent"
+                          aria-label="Spawn sub-agent"
                         >
-                          <Bot size={11} />
+                          <Bot size={11} aria-hidden="true" />
                         </button>
                       )}
+                      {/* Pin button */}
+                      <button
+                        onClick={() => {
+                          const panelIdx = panels.indexOf(panel);
+                          if (panelIdx < 0) return;
+                          if (panel.pinnedIndices?.includes(i)) {
+                            unpinMessage(panelIdx, i);
+                          } else {
+                            pinMessage(panelIdx, i);
+                          }
+                        }}
+                        className={`p-0.5 rounded transition-colors ${
+                          panel.pinnedIndices?.includes(i)
+                            ? "text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
+                            : "text-[var(--color-t3)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bgh)]"
+                        }`}
+                        title={panel.pinnedIndices?.includes(i) ? "Unpin message" : "Pin message"}
+                        aria-label={panel.pinnedIndices?.includes(i) ? "Unpin message" : "Pin message"}
+                      >
+                        <Pin size={11} />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -265,8 +348,9 @@ export function ChatView({ panel }: Props) {
           onClick={scrollToBottom}
           className="absolute bottom-3 right-3 w-7 h-7 rounded-full bg-[var(--color-bga)] border border-[var(--color-bdl)] text-[var(--color-t2)] hover:text-[var(--color-t1)] hover:bg-[var(--color-bgh)] flex items-center justify-center shadow-lg transition-all z-10 animate-[fadeIn_0.2s_ease]"
           title="Scroll to bottom"
+          aria-label="Scroll to bottom"
         >
-          <ArrowDown size={14} />
+          <ArrowDown size={14} aria-hidden="true" />
         </button>
       )}
     </div>

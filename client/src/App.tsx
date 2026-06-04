@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy } from "react";
 import { useWorkspaceStore } from "./stores/workspaceStore";
 import { useModelStore } from "./stores/modelStore";
 import { connect as wsConnect } from "./lib/ws";
@@ -6,6 +6,15 @@ import { AppShell } from "./components/layout/AppShell";
 import { SidebarSkeleton } from "./components/Skeletons";
 import { PanelSkeleton } from "./components/Skeletons";
 import { useKeyboard } from "./hooks/useKeyboard";
+
+// Code-split heavy dialog components
+const SettingsDialog = lazy(() => import("./components/settings/SettingsDialog").then(m => ({ default: m.SettingsDialog })));
+const CommandPalette = lazy(() => import("./components/CommandPalette").then(m => ({ default: m.CommandPalette })));
+
+// Inline fallback for lazy components
+function LazyFallback() {
+  return <div className="fixed inset-0 z-50 flex items-center justify-center"><div className="w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" /></div>;
+}
 
 export default function App() {
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces);
@@ -36,3 +45,6 @@ export default function App() {
 
   return <AppShell />;
 }
+
+// Re-export lazy components for AppShell to use via Suspense
+export { SettingsDialog, CommandPalette, LazyFallback };

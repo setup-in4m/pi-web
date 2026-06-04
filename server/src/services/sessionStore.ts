@@ -142,6 +142,44 @@ export async function getUsage(key: string): Promise<any> {
   return (entry.session as any).getContextUsage?.() || {};
 }
 
+export async function compact(key: string): Promise<{ tokensBefore: number; tokensAfter: number; tokensRemoved: number; message: string }> {
+  const entry = activeSessions.get(key);
+  if (!entry) return { tokensBefore: 0, tokensAfter: 0, tokensRemoved: 0, message: "Session not loaded" };
+  const session = entry.session as any;
+  const before = session.getContextUsage?.() || session.getSessionStats?.() || {};
+  const beforeTotal = (before.inputTokens || before.totalTokens || 0) + (before.outputTokens || 0);
+
+  // Try pi SDK compaction if available
+  if (typeof session.compactContext === "function") {
+    try {
+      await session.compactContext();
+    } catch (e: any) {
+      console.error("Compact error:", e);
+      return { tokensBefore: beforeTotal, tokensAfter: beforeTotal, tokensRemoved: 0, message: `Compaction failed: ${e.message}` };
+    }
+  } else if (typeof session.compact === "function") {
+    try {
+      await session.compact();
+    } catch (e: any) {
+      console.error("Compact error:", e);
+      return { tokensBefore: beforeTotal, tokensAfter: beforeTotal, tokensRemoved: 0, message: `Compaction failed: ${e.message}` };
+    }
+  } else {
+    return { tokensBefore: beforeTotal, tokensAfter: beforeTotal, tokensRemoved: 0, message: "Compaction not supported by this session" };
+  }
+
+  const after = session.getContextUsage?.() || session.getSessionStats?.() || {};
+  const afterTotal = (after.inputTokens || after.totalTokens || 0) + (after.outputTokens || 0);
+  const removed = Math.max(0, beforeTotal - afterTotal);
+
+  return {
+    tokensBefore: beforeTotal,
+    tokensAfter: afterTotal,
+    tokensRemoved: removed,
+    message: removed > 0 ? `Compacted: ${removed.toLocaleString()} tokens freed` : "Compact completed (no tokens removed)",
+  };
+}
+
 export async function close(key: string): Promise<void> {
   const entry = activeSessions.get(key);
   if (entry) {

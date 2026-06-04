@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { FolderOpen, Plus, Folder, ChevronRight, MessageSquare, Settings } from "lucide-react";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useModelStore } from "../../stores/modelStore";
@@ -7,7 +7,7 @@ import * as api from "../../lib/api";
 import { isConnected } from "../../lib/ws";
 
 export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { workspaces, loading, addWorkspace, refreshWorkspace } = useWorkspaceStore();
+  const { workspaces, loading, addWorkspace, refreshWorkspace, usageCache } = useWorkspaceStore();
   const { models } = useModelStore();
   const { panels, activeIndex, setActive, openExistingSession, setWorkspace } = usePanelStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -55,6 +55,20 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   };
 
   const connected = isConnected();
+
+  // Global usage totals
+  const globalUsage = useMemo(() => {
+    let totalIn = 0;
+    let totalOut = 0;
+    let totalCost = 0;
+    for (const key of Object.keys(usageCache)) {
+      const u = usageCache[key];
+      if (u.inputTokens != null) totalIn += u.inputTokens;
+      if (u.outputTokens != null) totalOut += u.outputTokens;
+      if (u.cost != null) totalCost += Number(u.cost);
+    }
+    return { totalIn, totalOut, totalCost };
+  }, [usageCache]);
 
   return (
     <aside className="w-[240px] min-w-[240px] bg-[var(--color-bg2)] border-r border-[var(--color-bd)] flex flex-col z-10">
@@ -132,6 +146,8 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                   )}
                   {ws.sessions.map((s) => {
                     const isActive = panels[activeIndex]?.sessionId === s.id;
+                    const cacheKey = `${ws.path}::${s.id}`;
+                    const usage = usageCache[cacheKey];
                     return (
                       <div
                         key={s.id}
@@ -139,8 +155,13 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                         className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] cursor-pointer rounded transition-colors hover:bg-[var(--color-bgh)] ${isActive ? "bg-[var(--color-bga)] text-[var(--color-accent)]" : ""}`}
                       >
                         <MessageSquare size={10} className="flex-shrink-0" />
-                        <span className="truncate">{s.title || "(untitled)"}</span>
-                        <span className="text-[8px] text-[var(--color-t3)] ml-auto flex-shrink-0">
+                        <span className="truncate flex-1 min-w-0">{s.title || "(untitled)"}</span>
+                        {usage?.cost != null && usage.cost > 0 && (
+                          <span className="text-[8px] text-[var(--color-warning)] flex-shrink-0" title="Session cost">
+                            ${Number(usage.cost).toFixed(4)}
+                          </span>
+                        )}
+                        <span className="text-[8px] text-[var(--color-t3)] flex-shrink-0">
                           {timeAgo(s.updatedAt)}
                         </span>
                       </div>
@@ -158,6 +179,16 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${connected ? "bg-[var(--color-success)]" : "bg-[var(--color-danger)]"}`} />
         <span className="flex-1">{connected ? "Connected" : "Offline"}</span>
         {models.length > 0 && <span>{models.length} models</span>}
+        {(globalUsage.totalIn > 0 || globalUsage.totalOut > 0) && (
+          <span className="text-[var(--color-t3)]" title={`${globalUsage.totalIn.toLocaleString()} in · ${globalUsage.totalOut.toLocaleString()} out`}>
+            {(globalUsage.totalIn + globalUsage.totalOut).toLocaleString()} tok
+          </span>
+        )}
+        {globalUsage.totalCost > 0 && (
+          <span className="text-[var(--color-warning)]" title="Total cost across all sessions">
+            ${globalUsage.totalCost.toFixed(3)}
+          </span>
+        )}
         <button onClick={onOpenSettings} className="text-[var(--color-t3)] hover:text-[var(--color-t1)] transition-colors p-0.5" title="Settings">
           <Settings size={11} />
         </button>

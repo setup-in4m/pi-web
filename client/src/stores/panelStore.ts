@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { MessageRecord, UsageInfo } from "../lib/api";
 import * as api from "../lib/api";
-import { subscribe as wsSubscribe } from "../lib/ws";
+import { subscribe as wsSubscribe, onReconnect } from "../lib/ws";
 import { useToastStore } from "./toastStore";
 import { renderToolStart, renderToolEnd, escapeHtml } from "../lib/tools";
 
@@ -18,7 +18,9 @@ export interface PanelData {
   loadingMessages: boolean;
   thinkingContent: string;
   streamingOutputTokens: number;  // estimated output tokens during streaming
+  thinkingTokens: number;           // estimated thinking tokens
   usage: UsageInfo | null;
+  pinnedIndices: number[];          // indices of pinned messages
 }
 
 interface PanelSlice {
@@ -50,6 +52,8 @@ interface PanelState extends PanelSlice {
   setThinkingContent: (key: string, content: string) => void;
   flushThinking: (key: string) => void;
   setStreamingTokens: (key: string, tokens: number) => void;
+  addThinkingTokens: (key: string, tokens: number) => void;
+  resetThinkingTokens: (key: string) => void;
 
   getByKey: (key: string) => PanelData | undefined;
 
@@ -64,9 +68,14 @@ interface PanelState extends PanelSlice {
   updateSubAgentCard: (key: string, subAgentId: string, content: string) => void;
   finalizeSubAgentCard: (key: string, subAgentId: string, result: string, usage?: UsageInfo) => void;
   branchFromMessage: (sourceIndex: number, messageIndex: number) => Promise<void>;
+
+  // Pinning
+  pinMessage: (panelIdx: number, msgIdx: number) => void;
+  unpinMessage: (panelIdx: number, msgIdx: number) => void;
 }
 
 const STORAGE_KEY = "pi-web-panels";
+const _toolStartTimes = new Map<string, number>();
 
 function loadPersisted(): PanelSlice {
   try {
@@ -90,7 +99,7 @@ function loadPersisted(): PanelSlice {
     panels: [{
       id: 1, workspacePath: null, sessionKey: null, sessionId: null,
       title: "", model: null, thinking: "off",
-      messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, usage: null,
+      messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [],
     }],
     activeIndex: 0,
     nextId: 2,
@@ -106,6 +115,7 @@ function persist(state: PanelSlice): void {
     title: p.title,
     model: p.model,
     thinking: p.thinking,
+    pinnedIndices: p.pinnedIndices,
   }));
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     panels: slim,
@@ -129,6 +139,8 @@ export const usePanelStore = create<PanelState>((set, get) => {
         state.flushThinking(event.sessionKey);
         // Reset streaming token counter at start of new message
         state.setStreamingTokens(event.sessionKey, 0);
+        // Reset thinking token counter
+        state.resetThinkingTokens(event.sessionKey);
         if (event.replace && event.text !== undefined) {
           state.replaceLastAssistant(event.sessionKey, event.text);
         }
@@ -143,10 +155,16 @@ export const usePanelStore = create<PanelState>((set, get) => {
         }
         break;
       case "thinking_delta":
-        if (event.text) state.setThinkingContent(event.sessionKey, event.text);
+        if (event.text) {
+          state.setThinkingContent(event.sessionKey, event.text);
+          // Track thinking tokens
+          state.addThinkingTokens(event.sessionKey, Math.round(event.text.length / 4));
+        }
         break;
-      case "tool_start":
+      case "tool_start": {
         if (event.toolName) {
+          // Track start time for duration
+          _toolStartTimes.set(event.sessionKey + "::" + event.toolName, Date.now());
           state.appendMessage(event.sessionKey, {
             role: "assistant",
             content: renderToolStart({ toolName: event.toolName, toolInput: event.toolInput }),
@@ -154,15 +172,21 @@ export const usePanelStore = create<PanelState>((set, get) => {
           });
         }
         break;
-      case "tool_end":
+      }
+      case "tool_end": {
         if (event.toolName && event.toolOutput) {
+          const startKey = event.sessionKey + "::" + event.toolName;
+          const startTime = _toolStartTimes.get(startKey);
+          const durationMs = startTime ? Date.now() - startTime : undefined;
+          if (startTime) _toolStartTimes.delete(startKey);
           state.appendMessage(event.sessionKey, {
             role: "assistant",
-            content: renderToolEnd({ toolName: event.toolName, toolOutput: event.toolOutput }),
+            content: renderToolEnd({ toolName: event.toolName, toolOutput: event.toolOutput, durationMs }),
             timestamp: new Date().toISOString(),
           });
         }
         break;
+      }
       case "agent_end":
         state.setStreaming(event.sessionKey, false);
         state.setStreamingTokens(event.sessionKey, 0);
@@ -206,6 +230,48 @@ export const usePanelStore = create<PanelState>((set, get) => {
     }
   });
 
+  // Register reconnect handler — re-fetch transcripts on reconnect
+  onReconnect(() => {
+    const state = get();
+    for (const panel of state.panels) {
+      if (!panel.sessionKey || !panel.workspacePath || !panel.sessionId) continue;
+      // Re-fetch transcript to catch any missed messages during disconnect
+      api.getTranscript(panel.sessionKey).then((transcript) => {
+        const current = get();
+        set({
+          panels: current.panels.map((p) =>
+            p.sessionKey === panel.sessionKey
+              ? { ...p, messages: transcript.transcript, usage: transcript.usage }
+              : p
+          ),
+        });
+      }).catch(() => {
+        // Session may have been evicted from server; re-open if needed
+        api.openSession(panel.workspacePath!, panel.sessionId!).then((result) => {
+          const current = get();
+          set({
+            panels: current.panels.map((p) =>
+              p.sessionKey === panel.sessionKey
+                ? { ...p, sessionKey: result.key, sessionId: result.key.split("::")[1] || panel.sessionId }
+                : p
+            ),
+          });
+          return api.getTranscript(result.key);
+        }).then((transcript) => {
+          if (!transcript) return;
+          const current = get();
+          set({
+            panels: current.panels.map((p) =>
+              p.sessionKey === panel.sessionKey
+                ? { ...p, messages: transcript.transcript, usage: transcript.usage }
+                : p
+            ),
+          });
+        }).catch(() => {});
+      });
+    }
+  });
+
   return {
     ...initial,
 
@@ -217,7 +283,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         workspacePath: s.panels[s.activeIndex]?.workspacePath || null,
         sessionKey: null, sessionId: null, title: "",
         model: null, thinking: "off",
-        messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, usage: null,
+        messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [],
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -458,6 +524,20 @@ export const usePanelStore = create<PanelState>((set, get) => {
         ),
       })),
 
+    addThinkingTokens: (key, tokens) =>
+      set((s) => ({
+        panels: s.panels.map((p) =>
+          p.sessionKey === key ? { ...p, thinkingTokens: (p.thinkingTokens || 0) + tokens } : p
+        ),
+      })),
+
+    resetThinkingTokens: (key) =>
+      set((s) => ({
+        panels: s.panels.map((p) =>
+          p.sessionKey === key ? { ...p, thinkingTokens: 0 } : p
+        ),
+      })),
+
     getByKey: (key) => get().panels.find((p) => p.sessionKey === key),
 
     // ── Orchestration ──────────────────────────────────────
@@ -482,7 +562,9 @@ export const usePanelStore = create<PanelState>((set, get) => {
         loadingMessages: false,
         thinkingContent: "",
         streamingOutputTokens: 0,
+        thinkingTokens: 0,
         usage: null,
+        pinnedIndices: [],
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -520,7 +602,9 @@ export const usePanelStore = create<PanelState>((set, get) => {
         loadingMessages: false,
         thinkingContent: "",
         streamingOutputTokens: 0,
+        thinkingTokens: 0,
         usage: null,
+        pinnedIndices: [],
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -584,7 +668,9 @@ export const usePanelStore = create<PanelState>((set, get) => {
         loadingMessages: false,
         thinkingContent: "",
         streamingOutputTokens: 0,
+        thinkingTokens: 0,
         usage: null,
+        pinnedIndices: [],
       };
       const next: PanelSlice = { panels: [panel], activeIndex: 0, nextId: s.nextId + 1 };
       set(next);
@@ -620,7 +706,9 @@ export const usePanelStore = create<PanelState>((set, get) => {
         loadingMessages: false,
         thinkingContent: "",
         streamingOutputTokens: 0,
+        thinkingTokens: 0,
         usage: null,
+        pinnedIndices: [],
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -733,6 +821,26 @@ export const usePanelStore = create<PanelState>((set, get) => {
           }
           return { ...p, messages: msgs };
         }),
+      })),
+
+    // ── Pinning ─────────────────────────────────────────
+
+    pinMessage: (panelIdx, msgIdx) =>
+      set((s) => ({
+        panels: s.panels.map((p, i) =>
+          i === panelIdx && !p.pinnedIndices.includes(msgIdx)
+            ? { ...p, pinnedIndices: [...p.pinnedIndices, msgIdx].sort((a, b) => a - b) }
+            : p
+        ),
+      })),
+
+    unpinMessage: (panelIdx, msgIdx) =>
+      set((s) => ({
+        panels: s.panels.map((p, i) =>
+          i === panelIdx
+            ? { ...p, pinnedIndices: p.pinnedIndices.filter((idx) => idx !== msgIdx) }
+            : p
+        ),
       })),
   };
 });

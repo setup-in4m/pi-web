@@ -93,6 +93,19 @@ marked.use({
       return `<h${depth} class="${sizes[depth] || "text-xs"} font-semibold mt-2 mb-1 text-[var(--color-t1)]">${text}</h${depth}>`;
     },
 
+    image({ href, title, text }: { href: string; title?: string | null; text: string }): string {
+      const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
+      const alt = escapeHtml(text || "");
+      const src = escapeHtml(href);
+      return `<a href="${src}" target="_blank" rel="noopener noreferrer" class="inline-block my-1">
+        <img src="${src}" alt="${alt}"${titleAttr} loading="lazy"
+          class="max-w-full rounded border border-[var(--color-bd)] cursor-pointer hover:opacity-90 transition-opacity"
+          style="max-height:400px"
+          onerror="this.style.display='none';this.parentElement.querySelector('.img-err').style.display='block'" />
+        <span class="img-err hidden text-[10px] text-[var(--color-t3)]">🖼 ${alt || src}</span>
+      </a>`;
+    },
+
     link({ href, title, text }: { href: string; title?: string | null; text: string }): string {
       const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
       return `<a href="${escapeHtml(href)}"${titleAttr} target="_blank" rel="noopener noreferrer" class="text-[var(--color-accent)] hover:underline">${text}</a>`;
@@ -138,12 +151,52 @@ marked.use({
 
 marked.setOptions({ breaks: true, gfm: true });
 
+// ── LRU Cache for memoized markdown rendering ────────────
+
+const CACHE_MAX = 200;
+const cache = new Map<string, { result: string; ts: number }>();
+
+let cacheHits = 0;
+let cacheMisses = 0;
+
+export function getCacheStats(): { hits: number; misses: number; size: number } {
+  return { hits: cacheHits, misses: cacheMisses, size: cache.size };
+}
+
 export function renderMarkdown(text: string): string {
-  try {
-    return marked.parse(text) as string;
-  } catch {
-    return escapeHtml(text).replace(/\n/g, "<br>");
+  // Check cache
+  const cached = cache.get(text);
+  if (cached) {
+    cacheHits++;
+    // Move to end (LRU: refresh timestamp)
+    cached.ts = Date.now();
+    return cached.result;
   }
+
+  cacheMisses++;
+
+  // Evict oldest if at capacity
+  if (cache.size >= CACHE_MAX) {
+    let oldestKey = "";
+    let oldestTs = Infinity;
+    for (const [k, v] of cache) {
+      if (v.ts < oldestTs) {
+        oldestTs = v.ts;
+        oldestKey = k;
+      }
+    }
+    if (oldestKey) cache.delete(oldestKey);
+  }
+
+  let result: string;
+  try {
+    result = marked.parse(text) as string;
+  } catch {
+    result = escapeHtml(text).replace(/\n/g, "<br>");
+  }
+
+  cache.set(text, { result, ts: Date.now() });
+  return result;
 }
 
 export function escapeHtml(text: string): string {

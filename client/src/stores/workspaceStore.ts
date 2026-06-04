@@ -1,22 +1,25 @@
 import { create } from "zustand";
-import type { WorkspaceData } from "../lib/api";
+import type { WorkspaceData, UsageInfo } from "../lib/api";
 import * as api from "../lib/api";
 
 interface WorkspaceState {
   workspaces: WorkspaceData[];
   loading: boolean;
   error: string | null;
+  usageCache: Record<string, UsageInfo>;
 
   loadWorkspaces: () => Promise<void>;
   addWorkspace: (path: string) => Promise<void>;
   removeWorkspace: (path: string) => void;
   refreshWorkspace: (path: string) => Promise<void>;
+  fetchSessionUsage: (workspacePath: string, sessionId: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   workspaces: [],
   loading: false,
   error: null,
+  usageCache: {},
 
   loadWorkspaces: async () => {
     set({ loading: true, error: null });
@@ -61,5 +64,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         workspaces: s.workspaces.map((w) => (w.path === path ? data : w)),
       }));
     } catch {}
+  },
+
+  fetchSessionUsage: async (workspacePath, sessionId) => {
+    const key = `${workspacePath}::${sessionId}`;
+    try {
+      const { usage } = await api.getSessionUsage(key);
+      set((s) => ({
+        usageCache: { ...s.usageCache, [key]: usage },
+      }));
+    } catch {
+      // session may not be active
+    }
   },
 }));

@@ -119,5 +119,28 @@ export const spawnSubAgent = (key: string, task: string, options?: { model?: str
     { task, ...options }
   );
 
+export const getSessionUsage = (key: string) =>
+  api.get<{ usage: UsageInfo }>(`/api/session/${encodeURIComponent(key)}/usage`);
+
+export const compactSession = (key: string) =>
+  api.post<{ tokensBefore?: number; tokensAfter?: number; tokensRemoved?: number; message: string; error?: string }>(
+    `/api/session/${encodeURIComponent(key)}/compact`
+  );
+
 export const getActiveSessions = () =>
   api.get<{ sessions: SessionRecord[] }>("/api/sessions/active");
+
+export const getExtensions = () =>
+  api.get<{ extensions: { id: string; name: string; version: string; enabled: boolean; description?: string }[] }>("/api/extensions");
+
+export const installExtension = (path: string) =>
+  api.post<{ ok: boolean; name: string; id: string }>("/api/extensions/install", { path });
+
+export const toggleExtension = (id: string, enabled: boolean) =>
+  api.post<{ ok: boolean; enabled: boolean }>(`/api/extensions/${encodeURIComponent(id)}/toggle`, { enabled });
+
+export const clearAllData = () =>
+  api.delete<{ ok: boolean }>("/api/data");
+
+export const exportAll = () =>
+  api.get<Record<string, unknown>>("/api/export/all");

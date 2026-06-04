@@ -17,11 +17,39 @@
         "height": 800,
         "minWidth": 600,
         "minHeight": 400,
-        "center": true
+        "center": true,
+        "decorations": true
       }
     ],
     "security": {
       "csp": "default-src 'self'; connect-src 'self' http://localhost:3456 ws://localhost:3456; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.ico",
+      "tooltip": "pi",
+      "menuOnLeftClick": false
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "publisher": "pi-web",
+    "copyright": "Copyright (c) 2024-2026",
+    "category": "DeveloperTool",
+    "shortDescription": "Desktop orchestration kit for pi coding agent",
+    "windows": {
+      "wix": {},
+      "nsis": {}
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "linux": {
+      "deb": {},
+      "appimage": {}
     }
   },
   "plugins": {

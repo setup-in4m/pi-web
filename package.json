@@ -13,7 +13,9 @@
     "dev:server": "npm run dev -w server",
     "dev:client": "npm run dev -w client",
     "build": "npm run build -w server && npm run build -w client",
+    "build:tauri": "npm run build && cargo tauri build",
     "tauri": "cargo tauri dev",
+    "tauri:dev": "concurrently -n server,client,tauri -c blue,green,yellow \"npm run dev -w server\" \"npm run dev -w client\" \"cargo tauri dev\"",
     "lint": "npm run lint -w client && npm run lint -w server",
     "clean": "rm -rf client/dist server/dist"
   },

@@ -5,6 +5,22 @@ import * as sessions from "../services/sessionStore.js";
 
 const router = Router();
 
+// ── Error helper ─────────────────────────────────────────
+
+function errorCode(e: any): string {
+  const msg = (e.message || "").toLowerCase();
+  if (msg.includes("permission") || msg.includes("eacces") || msg.includes("access denied")) return "PERMISSION";
+  if (msg.includes("disk") || msg.includes("space") || msg.includes("enospc") || msg.includes("full")) return "DISK_FULL";
+  if (msg.includes("not found") || msg.includes("enoent") || msg.includes("does not exist")) return "NOT_FOUND";
+  if (msg.includes("already") || msg.includes("exist")) return "ALREADY_EXISTS";
+  return "INTERNAL";
+}
+
+function sendError(res: any, e: any, status = 500) {
+  const code = errorCode(e);
+  res.status(status).json({ error: e.message || "Internal server error", code });
+}
+
 // List sessions in a workspace
 router.get("/workspace/:enc", async (req, res) => {
   try {
@@ -21,7 +37,7 @@ router.get("/workspace/:enc", async (req, res) => {
 
     res.json({ path, name, sessions: ss });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
 
@@ -37,7 +53,7 @@ router.delete("/workspace/:enc", (req, res) => {
     store.removeWorkspace(path);
     res.json({ ok: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
 
@@ -62,13 +78,13 @@ router.post("/session/open", async (req, res) => {
   try {
     const { workspacePath, sessionId } = req.body;
     if (!workspacePath || !sessionId) {
-      return res.status(400).json({ error: "workspacePath and sessionId required" });
+      return res.status(400).json({ error: "workspacePath and sessionId required", code: "INVALID_INPUT" });
     }
     const result = await sessions.open(workspacePath, sessionId);
     res.json({ ok: true, ...result });
   } catch (e: any) {
     console.error("Open error:", e);
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
 
@@ -77,13 +93,13 @@ router.post("/session/create", async (req, res) => {
   try {
     const { workspacePath, title } = req.body;
     if (!workspacePath) {
-      return res.status(400).json({ error: "workspacePath required" });
+      return res.status(400).json({ error: "workspacePath required", code: "INVALID_INPUT" });
     }
     const result = await sessions.create(workspacePath, title);
     res.json(result);
   } catch (e: any) {
     console.error("Create error:", e);
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
 
@@ -92,11 +108,11 @@ router.post("/session/:key/message", async (req, res) => {
   try {
     const key = decodeURIComponent(req.params.key);
     const { message } = req.body;
-    if (!message) return res.status(400).json({ error: "message required" });
+    if (!message) return res.status(400).json({ error: "message required", code: "INVALID_INPUT" });
     await sessions.sendMessage(key, message);
     res.json({ ok: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
 
@@ -107,7 +123,7 @@ router.get("/session/:key/transcript", async (req, res) => {
     const result = await sessions.getTranscript(key);
     res.json(result);
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
 
@@ -119,7 +135,7 @@ router.post("/session/:key/model", async (req, res) => {
     await sessions.setModel(key, provider, modelId);
     res.json({ ok: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
 
@@ -131,7 +147,7 @@ router.post("/session/:key/thinking", async (req, res) => {
     await sessions.setThinking(key, level);
     res.json({ ok: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
 
@@ -142,7 +158,18 @@ router.get("/session/:key/usage", async (req, res) => {
     const usage = await sessions.getUsage(key);
     res.json({ usage });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
+  }
+});
+
+// Compaction
+router.post("/session/:key/compact", async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key);
+    const result = await sessions.compact(key);
+    res.json(result);
+  } catch (e: any) {
+    sendError(res, e);
   }
 });
 
@@ -153,7 +180,7 @@ router.delete("/session/:key", async (req, res) => {
     await sessions.close(key);
     res.json({ ok: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
 
@@ -165,18 +192,83 @@ function firstMsg(m: any): string | null {
   return t.substring(0, 60);
 }
 
-// ── Export session as markdown ───────────────────────────
+// ── Export session as markdown / html ───────────────────
 
 router.get("/session/:key/export", async (req, res) => {
   try {
     const key = decodeURIComponent(req.params.key);
+    const format = (req.query.format as string) || "md";
     const entry = sessions.get(key);
-    if (!entry) return res.status(404).json({ error: "Session not loaded" });
+    if (!entry) return res.status(404).json({ error: "Session not loaded", code: "NOT_FOUND" });
 
     const msgs = (entry.session as any).messages || [];
     const storedSession = store.getSession(key);
     const title = storedSession?.title || "pi session";
 
+    if (format === "html") {
+      let html = `<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(title)}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"><\/script>
+<style>
+:root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+  --tx1: #e6edf3; --tx2: #8b949e; --tx3: #6e7681;
+  --bd: #30363d; --accent: #7c5cf0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--tx1); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 820px; margin: 0 auto; padding: 2rem 1.5rem; line-height: 1.6; font-size: 14px; }
+h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--tx1); }
+.meta { color: var(--tx3); font-size: 0.75rem; margin-bottom: 2rem; }
+.msg { margin-bottom: 1.5rem; padding: 1rem; border-radius: 8px; border: 1px solid var(--bd); }
+.msg.user { background: rgba(124,92,240,0.05); border-color: rgba(124,92,240,0.15); }
+.msg.assistant { background: var(--bg3); }
+.role { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem; }
+.role.user { color: var(--accent); }
+.role.assistant { color: #3fb950; }
+pre { background: var(--bg); border: 1px solid var(--bd); border-radius: 6px; padding: 1rem; overflow-x: auto; margin: 0.5rem 0; }
+code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem; }
+.thinking { border: 1px solid var(--bd); border-radius: 6px; padding: 0.75rem; margin: 0.5rem 0; background: var(--bg2); }
+.thinking summary { color: var(--tx3); font-size: 0.75rem; cursor: pointer; }
+.thinking .content { color: var(--tx2); font-style: italic; margin-top: 0.5rem; font-size: 0.75rem; white-space: pre-wrap; }
+.sub-agent { border: 1px solid rgba(59,130,246,0.3); background: rgba(59,130,246,0.06); border-radius: 6px; padding: 0.75rem; margin: 0.5rem 0; }
+.sub-agent summary { cursor: pointer; font-size: 0.75rem; color: var(--tx2); }
+.sub-agent .result { margin-top: 0.5rem; white-space: pre-wrap; }
+.tool { border: 1px solid var(--bd); border-radius: 6px; padding: 0.75rem; margin: 0.5rem 0; background: var(--bg2); }
+.tool summary { cursor: pointer; font-size: 0.75rem; color: var(--tx2); }
+.tool .output { margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+<h1>${escapeHtml(title)}</h1>
+<div class="meta">Exported from pi-web on ${new Date().toLocaleString()}</div>
+`;
+
+      for (const m of msgs) {
+        const role = m.role || "assistant";
+        const content = typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.map((c: any) => c.text || "").join("") : "";
+        html += `<div class="msg ${role}">
+<div class="role ${role}">${role === "user" ? "You" : "pi"}</div>
+<div class="content">${content}</div>
+</div>
+`;
+      }
+
+      html += `<script>hljs.highlightAll();<\/script>
+</body>
+</html>`;
+
+      res.setHeader("Content-Type", "text/html");
+      res.setHeader("Content-Disposition", `attachment; filename="${title.replace(/[^a-zA-Z0-9]/g, "_")}.html"`);
+      res.send(html);
+      return;
+    }
+
+    // Default: markdown export
     let md = `# ${title}\n\n`;
     md += `*Exported from pi-web on ${new Date().toISOString()}*\n\n---\n\n`;
 
@@ -190,6 +282,15 @@ router.get("/session/:key/export", async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${title.replace(/[^a-zA-Z0-9]/g, "_")}.md"`);
     res.send(md);
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    sendError(res, e);
   }
 });
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}

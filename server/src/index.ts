@@ -10,6 +10,8 @@ import modelRoutes from "./routes/models.js";
 import workspaceRoutes from "./routes/workspace.js";
 import browseRoutes from "./routes/browse.js";
 import subagentRoutes from "./routes/subagent.js";
+import dataRoutes from "./routes/data.js";
+import extensionRoutes from "./routes/extensions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -22,6 +24,8 @@ app.use("/api", modelRoutes);
 app.use("/api", workspaceRoutes);
 app.use("/api", browseRoutes);
 app.use("/api", subagentRoutes);
+app.use("/api", dataRoutes);
+app.use("/api", extensionRoutes);
 
 // Serve static client in dev (if built) or fallback
 const clientDist = join(__dirname, "..", "..", "client", "dist");

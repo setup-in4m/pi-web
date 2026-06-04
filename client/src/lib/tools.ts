@@ -20,6 +20,7 @@ export interface ToolStart {
 export interface ToolEnd {
   toolName: string;
   toolOutput: string;
+  durationMs?: number;
 }
 
 export function renderToolStart({ toolName, toolInput }: ToolStart): string {
@@ -35,16 +36,18 @@ export function renderToolStart({ toolName, toolInput }: ToolStart): string {
   </div>`;
 }
 
-export function renderToolEnd({ toolName, toolOutput }: ToolEnd): string {
+export function renderToolEnd({ toolName, toolOutput, durationMs }: ToolEnd): string {
   const type = classifyTool(toolName);
   const icon = toolIconDone(type);
   const label = toolLabelDone(type, toolName);
   const body = renderToolBody(type, toolOutput);
+  const timeStr = durationMs != null ? `<span class="text-[8px] text-[var(--color-t3)] ml-auto">⏱ ${(durationMs / 1000).toFixed(1)}s</span>` : "";
 
   return `<details class="tool-card my-1 px-2 py-1.5 rounded border border-[var(--color-bdl)] bg-[var(--color-bg2)]" open>
     <summary class="text-[10px] text-[var(--color-t2)] cursor-pointer hover:text-[var(--color-t1)] select-none flex items-center gap-1.5">
       <span>${icon}</span>
       <span>${label}</span>
+      ${timeStr}
     </summary>
     ${body}
   </details>`;
@@ -104,29 +107,167 @@ function toolLabelDone(type: ToolType, name: string): string {
 }
 
 function renderToolBody(type: ToolType, output: string): string {
-  const truncated = output.length > 5000 ? output.slice(0, 5000) + "\n…(truncated)" : output;
-  const escaped = escapeHtml(truncated);
-
   switch (type) {
-    case "bash":
-      return `<div class="mt-1 text-[10px]">
-        <div class="text-[var(--color-t3)] text-[9px] mb-0.5">Output:</div>
-        <pre class="p-1.5 bg-[#0d1117] rounded border border-[var(--color-bd)] overflow-x-auto max-h-[300px] overflow-y-auto text-[11px] leading-relaxed"><code>${escaped}</code></pre>
-      </div>`;
-    case "read":
-      return `<div class="mt-1 text-[10px]">
-        <pre class="p-1.5 bg-[#0d1117] rounded border border-[var(--color-bd)] overflow-x-auto max-h-[350px] overflow-y-auto text-[11px] leading-relaxed"><code>${escaped}</code></pre>
-      </div>`;
+    case "read": return renderReadBody(output);
+    case "write":
+    case "edit": return renderDiffBody(output);
+    case "bash": return renderBashBody(output);
     case "grep":
-    case "find":
-      return `<div class="mt-1">
-        <pre class="p-1.5 bg-[#0d1117] rounded border border-[var(--color-bd)] overflow-x-auto max-h-[250px] overflow-y-auto text-[11px] leading-relaxed"><code>${escaped}</code></pre>
-      </div>`;
-    default:
-      return `<div class="mt-1">
-        <pre class="p-1.5 bg-[#0d1117] rounded border border-[var(--color-bd)] overflow-x-auto max-h-[300px] overflow-y-auto text-[11px] leading-relaxed"><code>${escaped}</code></pre>
-      </div>`;
+    case "find": return renderResultsTable(output);
+    case "ls": return renderFileTree(output);
+    default: return renderGenericBody(output);
   }
+}
+
+// ── Read: content + line numbers ──────────────────────────
+
+function renderReadBody(output: string): string {
+  const truncated = output.length > 5000 ? output.slice(0, 5000) + "\n…(truncated)" : output;
+  const lines = truncated.split("\n");
+  const numWidth = String(lines.length).length;
+  return `<div class="mt-1 overflow-auto max-h-[350px] rounded border border-[var(--color-bd)]">
+    <table class="w-full text-[11px] leading-relaxed font-mono border-collapse">
+      <tbody class="font-mono">
+        ${lines.map((line, i) => `<tr class="${i % 2 === 0 ? "bg-[#0d1117]" : "bg-[#0a0e14]"}">
+          <td class="text-right pr-3 pl-2 py-0 text-[#6e7681] select-none border-r border-[var(--color-bd)] align-top whitespace-nowrap" style="min-width:${numWidth + 2}ch">${i + 1}</td>
+          <td class="pl-2 py-0 text-[var(--color-t1)] whitespace-pre-wrap break-all">${escapeHtml(line) || " "}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ── Write/Edit: unified diff ──────────────────────────────
+
+function renderDiffBody(output: string): string {
+  const truncated = output.length > 5000 ? output.slice(0, 5000) + "\n…(truncated)" : output;
+  const lines = truncated.split("\n");
+  return `<div class="mt-1 overflow-auto max-h-[350px] rounded border border-[var(--color-bd)]">
+    <table class="w-full text-[11px] leading-relaxed font-mono border-collapse">
+      <tbody class="font-mono">
+        ${lines.map((line) => {
+          const esc = escapeHtml(line) || " ";
+          if (line.startsWith("+")) return `<tr class="bg-[rgba(34,197,94,0.08)]"><td class="w-[1em] text-center text-[#22c55e] pl-2 py-0 select-none">+</td><td class="pl-1 py-0 text-[var(--color-t1)] whitespace-pre-wrap break-all">${esc}</td></tr>`;
+          if (line.startsWith("-")) return `<tr class="bg-[rgba(239,68,68,0.08)]"><td class="w-[1em] text-center text-[#ef4444] pl-2 py-0 select-none">-</td><td class="pl-1 py-0 text-[var(--color-t1)] whitespace-pre-wrap break-all">${esc}</td></tr>`;
+          if (line.startsWith("@@")) return `<tr class="bg-[rgba(59,130,246,0.08)]"><td class="text-[#3b82f6] pl-2 py-0 select-none">${esc}</td></tr>`;
+          return `<tr class="bg-[#0d1117]"><td class="w-[1em] text-center text-[#6e7681] pl-2 py-0 select-none"> </td><td class="pl-1 py-0 text-[var(--color-t1)] whitespace-pre-wrap break-all">${esc}</td></tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ── Bash: command + exit code + stdout/stderr ─────────────
+
+function renderBashBody(output: string): string {
+  const truncated = output.length > 5000 ? output.slice(0, 5000) + "\n…(truncated)" : output;
+  // Try to detect if output contains exit code info or stderr markers
+  const hasError = /error|fail|command not found/i.test(truncated.slice(0, 500));
+  const exitBadge = hasError
+    ? `<span class="px-1 py-0 rounded text-[9px] font-medium bg-[rgba(239,68,68,0.15)] text-[#ef4444]">exit ≠ 0</span>`
+    : `<span class="px-1 py-0 rounded text-[9px] font-medium bg-[rgba(34,197,94,0.12)] text-[#22c55e]">exit 0</span>`;
+
+  return `<div class="mt-1">
+    <div class="flex items-center gap-1.5 mb-1.5">
+      <span class="text-[9px] text-[var(--color-t3)] uppercase">Output</span>
+      ${exitBadge}
+    </div>
+    <pre class="p-1.5 bg-[#0d1117] rounded border border-[var(--color-bd)] overflow-x-auto max-h-[300px] overflow-y-auto text-[11px] leading-relaxed"><code>${escapeHtml(truncated)}</code></pre>
+  </div>`;
+}
+
+// ── Grep/Find: results table ──────────────────────────────
+
+function renderResultsTable(output: string): string {
+  const truncated = output.length > 5000 ? output.slice(0, 5000) + "\n…(truncated)" : output;
+  const lines = truncated.split("\n").filter(Boolean);
+
+  // Parse common grep output format: file:line:match  or  file: line: match
+  const parsed: { file: string; line: string; match: string }[] = [];
+  for (const raw of lines) {
+    // Strip ANSI codes
+    const clean = raw.replace(/\x1b\[[0-9;]*m/g, "");
+    const match = clean.match(/^(.+?):(\d+):\s*(.*)$/);
+    if (match) {
+      parsed.push({ file: match[1], line: match[2], match: match[3] });
+    } else if (clean.trim()) {
+      parsed.push({ file: "", line: "", match: clean });
+    }
+  }
+
+  if (parsed.length === 0) {
+    return `<div class="mt-1 text-[10px] text-[var(--color-t3)]">No matches found</div>`;
+  }
+
+  return `<div class="mt-1 overflow-auto max-h-[250px] rounded border border-[var(--color-bd)]">
+    <table class="w-full text-[10px] leading-relaxed border-collapse">
+      <thead class="sticky top-0 bg-[var(--color-bg3)] text-[var(--color-t2)] font-medium">
+        <tr>
+          <th class="text-left px-2 py-0.5 border-b border-[var(--color-bd)]">File</th>
+          <th class="text-right px-2 py-0.5 border-b border-[var(--color-bd)] w-[4ch]">#</th>
+          <th class="text-left px-2 py-0.5 border-b border-[var(--color-bd)]">Match</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${parsed.slice(0, 200).map((row, i) =>
+          `<tr class="${i % 2 === 0 ? "bg-[#0d1117]" : "bg-[#0a0e14]"}">
+            <td class="px-2 py-0 font-mono text-[var(--color-accent)] whitespace-nowrap">${escapeHtml(row.file)}</td>
+            <td class="px-2 py-0 text-right text-[#6e7681] font-mono">${escapeHtml(row.line)}</td>
+            <td class="px-2 py-0 text-[var(--color-t1)] font-mono whitespace-pre-wrap break-all">${escapeHtml(row.match)}</td>
+          </tr>`
+        ).join("")}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ── Ls: file tree ─────────────────────────────────────────
+
+function renderFileTree(output: string): string {
+  const truncated = output.length > 5000 ? output.slice(0, 5000) + "\n…(truncated)" : output;
+  const lines = truncated.split("\n").filter(l => l.trim());
+
+  // Split into dirs and files, sort alphabetically
+  const dirs: string[] = [];
+  const files: string[] = [];
+  for (const line of lines) {
+    const clean = line.replace(/\x1b\[[0-9;]*m/g, "").replace(/^\s*[-–*>·]\s*/, "").trim();
+    if (!clean) continue;
+    // Heuristic: entries ending with / or containing no . are dirs
+    if (clean.endsWith("/") || clean.endsWith("\\") || !clean.includes(".")) {
+      dirs.push(clean.replace(/[/\\]$/, ""));
+    } else {
+      files.push(clean);
+    }
+  }
+
+  if (dirs.length === 0 && files.length === 0) {
+    return `<div class="mt-1"><pre class="p-1.5 bg-[#0d1117] rounded border border-[var(--color-bd)] overflow-x-auto max-h-[300px] overflow-y-auto text-[11px] leading-relaxed"><code>${escapeHtml(truncated)}</code></pre></div>`;
+  }
+
+  const dirHtml = dirs.sort().map(d =>
+    `<div class="flex items-center gap-1 py-0 hover:bg-[var(--color-bgh)] px-1 rounded"><span class="text-xs">📁</span><span class="text-[11px] font-mono text-[var(--color-accent)]">${escapeHtml(d)}/</span></div>`
+  ).join("");
+  const fileHtml = files.sort().map(f =>
+    `<div class="flex items-center gap-1 py-0 hover:bg-[var(--color-bgh)] px-1 rounded"><span class="text-xs">📄</span><span class="text-[11px] font-mono text-[var(--color-t1)]">${escapeHtml(f)}</span></div>`
+  ).join("");
+
+  const total = dirs.length + files.length;
+  return `<div class="mt-1 overflow-auto max-h-[300px] rounded border border-[var(--color-bd)] bg-[#0d1117] p-1.5">
+    ${dirHtml}
+    ${dirHtml && fileHtml ? "" : ""}
+    ${fileHtml}
+    <div class="text-[9px] text-[var(--color-t3)] mt-1 pt-1 border-t border-[var(--color-bd)]">${dirs.length} dirs, ${files.length} files (${total} total)</div>
+  </div>`;
+}
+
+// ── Generic fallback ──────────────────────────────────────
+
+function renderGenericBody(output: string): string {
+  const truncated = output.length > 5000 ? output.slice(0, 5000) + "\n…(truncated)" : output;
+  return `<div class="mt-1">
+    <pre class="p-1.5 bg-[#0d1117] rounded border border-[var(--color-bd)] overflow-x-auto max-h-[300px] overflow-y-auto text-[11px] leading-relaxed"><code>${escapeHtml(truncated)}</code></pre>
+  </div>`;
 }
 
 function extractPath(input: unknown): string | null {

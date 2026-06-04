@@ -1,4 +1,7 @@
-import { AlertTriangle, Zap } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Zap, Loader2 } from "lucide-react";
+import { compactSession } from "../../lib/api";
+import { useToastStore } from "../../stores/toastStore";
 
 interface Props {
   inputTokens?: number;
@@ -6,9 +9,15 @@ interface Props {
   contextWindow?: number;
   cost?: number;
   streamingTokens?: number;
+  thinkingTokens?: number;
+  sessionKey?: string | null;
+  onCompacted?: () => void;
 }
 
-export function TokenBar({ inputTokens, outputTokens, contextWindow, cost, streamingTokens }: Props) {
+export function TokenBar({ inputTokens, outputTokens, contextWindow, cost, streamingTokens, thinkingTokens, sessionKey, onCompacted }: Props) {
+  const [compacting, setCompacting] = useState(false);
+  const addToast = useToastStore((s) => s.addToast);
+
   const streamEst = streamingTokens || 0;
   const total = (inputTokens || 0) + (outputTokens || 0) + streamEst;
   const pct = contextWindow && contextWindow > 0 ? (total / contextWindow) * 100 : 0;
@@ -24,6 +33,24 @@ export function TokenBar({ inputTokens, outputTokens, contextWindow, cost, strea
     barColor = "var(--color-warning)";
     showWarning = true;
   }
+
+  const handleCompact = async () => {
+    if (!sessionKey || compacting) return;
+    setCompacting(true);
+    try {
+      const result = await compactSession(sessionKey);
+      if (result.error) {
+        addToast(result.error, "warning");
+      } else {
+        addToast(result.message, "success");
+      }
+      onCompacted?.();
+    } catch (e: any) {
+      addToast(e.message || "Compaction failed", "error");
+    } finally {
+      setCompacting(false);
+    }
+  };
 
   if (!total && !cost && !streamingTokens) return null;
 
@@ -70,6 +97,13 @@ export function TokenBar({ inputTokens, outputTokens, contextWindow, cost, strea
       {/* Cost */}
       {cost != null && cost > 0 && <span className="text-[var(--color-warning)]">${cost.toFixed(4)}</span>}
 
+      {/* Thinking tokens */}
+      {thinkingTokens != null && thinkingTokens > 0 && (
+        <span className="text-[var(--color-t3)] italic" title={`${thinkingTokens.toLocaleString()} thinking tokens`}>
+          🧠{thinkingTokens.toLocaleString()}
+        </span>
+      )}
+
       {/* Warning indicators */}
       {showWarning && !showDanger && (
         <span className="text-[var(--color-warning)]" title={`${Math.round(pct)}% of ${contextWindow?.toLocaleString()} context used`}>
@@ -79,7 +113,21 @@ export function TokenBar({ inputTokens, outputTokens, contextWindow, cost, strea
       {showDanger && (
         <span className="text-[var(--color-danger)] font-medium flex items-center gap-0.5" title={`Context nearly full! ${Math.round(pct)}% used. Consider compacting.`}>
           <AlertTriangle size={9} />
-          <span>compact?</span>
+          {sessionKey ? (
+            <button
+              onClick={handleCompact}
+              disabled={compacting}
+              className="underline hover:text-[var(--color-danger-hover)] disabled:opacity-50"
+            >
+              {compacting ? (
+                <Loader2 size={9} className="inline animate-spin" />
+              ) : (
+                "compact"
+              )}
+            </button>
+          ) : (
+            <span>compact?</span>
+          )}
         </span>
       )}
     </div>

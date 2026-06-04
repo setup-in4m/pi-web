@@ -1,12 +1,166 @@
-import { useState, useEffect } from "react";
-import { X, Settings, Sun, Moon, Monitor, Palette, Type, User, Plus, Trash2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Settings, Sun, Moon, Monitor, Palette, Type, User, Plus, Trash2, Pencil, RotateCcw, Database, Download, Trash, Zap } from "lucide-react";
 import { useThemeStore, type ThemeMode, type AccentColor, ACCENT_MAP, type Density } from "../../stores/themeStore";
 import { useProfileStore } from "../../stores/profileStore";
 import { useModelStore } from "../../stores/modelStore";
+import { useSettingsStore, DEFAULT_KEYBINDINGS } from "../../stores/settingsStore";
+import { ExtensionManager } from "./ExtensionManager";
+import { useToastStore } from "../../stores/toastStore";
+import * as api from "../../lib/api";
+import type { Model } from "../../lib/api";
+
+// ── Models Tab ───────────────────────────────────────────
+
+function ModelsTab() {
+  const { models, providers, loading } = useModelStore();
+
+  return (
+    <div className="flex flex-col gap-3">
+      {loading && <div className="text-[11px] text-[var(--color-t3)] italic">Loading models…</div>}
+      {!loading && providers.length === 0 && (
+        <div className="text-[11px] text-[var(--color-t2)]">
+          <p>No models configured.</p>
+          <p className="mt-1">Run <code className="bg-[var(--color-bg3)] px-1 py-0.5 rounded text-[10px]">pi models</code> to manage providers and API keys.</p>
+        </div>
+      )}
+      {providers.map((prov) => {
+        const provModels = models.filter((m) => m.providerId === prov);
+        return (
+          <div key={prov}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className={`w-2 h-2 rounded-full ${provModels.length > 0 ? "bg-[var(--color-success)]" : "bg-[var(--color-danger)]"}`} />
+              <span className="text-[11px] font-semibold text-[var(--color-t2)] capitalize">{prov}</span>
+              <span className="text-[9px] text-[var(--color-t3)]">
+                ({provModels.length} model{provModels.length !== 1 ? "s" : ""})
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5 ml-4">
+              {provModels.map((m) => (
+                <ModelCard key={m.modelId} model={m} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ModelCard({ model }: { model: Model }) {
+  const ctxStr = model.contextWindow ? `${(model.contextWindow / 1000).toFixed(0)}K ctx` : null;
+  const costStr = model.cost
+    ? `$${model.cost.input.toFixed(2)}/$1M in · $${model.cost.output.toFixed(2)}/$1M out`
+    : null;
+
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[var(--color-bgh)] transition-colors">
+      <Zap size={12} className="text-[var(--color-warning)] flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="text-[11px] text-[var(--color-t1)]">{model.displayName}</div>
+        <div className="text-[9px] text-[var(--color-t3)]">
+          {[ctxStr, costStr, model.supportsThinking ? "🧠" : null].filter(Boolean).join(" · ")}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface Props {
   open: boolean;
   onClose: () => void;
+}
+
+// ── Data Tab ────────────────────────────────────────────
+
+function DataTab() {
+  const [exporting, setExporting] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const addToast = useToastStore((s) => s.addToast);
+
+  const handleExportAll = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/export/all");
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pi-web-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast("Export downloaded", "success");
+    } catch (e: any) {
+      addToast(e.message, "error");
+    }
+    setExporting(false);
+  };
+
+  const handleClearAll = async () => {
+    if (!confirmClear) { setConfirmClear(true); return; }
+    setClearing(true);
+    try {
+      await api.api.delete("/api/data");
+      addToast("All data cleared", "success");
+      setConfirmClear(false);
+    } catch (e: any) {
+      addToast(e.message, "error");
+    }
+    setClearing(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <div className="text-[11px] font-medium text-[var(--color-t2)] mb-2 flex items-center gap-1.5">
+          <Database size={12} />
+          Data Management
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="p-3 rounded-lg border border-[var(--color-bd)] bg-[var(--color-bg3)]">
+            <div className="text-[11px] text-[var(--color-t2)] mb-1">Export all sessions</div>
+            <div className="text-[9px] text-[var(--color-t3)] mb-2">Download all workspaces and sessions as a JSON backup.</div>
+            <button
+              onClick={handleExportAll}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-2 py-1 rounded bg-[var(--color-accent)] text-white text-[11px] font-medium hover:bg-[var(--color-accent-hover)] disabled:opacity-25 transition-colors"
+            >
+              <Download size={11} />
+              Export All
+            </button>
+          </div>
+
+          <div className="p-3 rounded-lg border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/5">
+            <div className="text-[11px] text-[var(--color-t2)] mb-1">Clear all data</div>
+            <div className="text-[9px] text-[var(--color-t3)] mb-2">
+              Remove all workspaces, sessions, and stored data. This cannot be undone.
+            </div>
+            <button
+              onClick={handleClearAll}
+              disabled={clearing}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                confirmClear
+                  ? "bg-[var(--color-danger)] text-white hover:bg-[var(--color-danger)]/80"
+                  : "border border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
+              } disabled:opacity-25`}
+            >
+              <Trash size={11} />
+              {confirmClear ? "Confirm — click again to delete" : clearing ? "Clearing…" : "Clear All Data"}
+            </button>
+            {confirmClear && (
+              <button
+                onClick={() => setConfirmClear(false)}
+                className="text-[10px] text-[var(--color-t3)] hover:text-[var(--color-t2)] mt-1 ml-1 transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function SettingsDialog({ open, onClose }: Props) {
@@ -16,14 +170,52 @@ export function SettingsDialog({ open, onClose }: Props) {
   const [newProfileName, setNewProfileName] = useState("");
   const [newProfileModel, setNewProfileModel] = useState("");
   const [newProfileThinking, setNewProfileThinking] = useState("off");
-  const [activeTab, setActiveTab] = useState<"appearance" | "models" | "shortcuts" | "profiles">("appearance");
+  const [activeTab, setActiveTab] = useState<"appearance" | "models" | "shortcuts" | "profiles" | "data" | "extensions">("appearance");
+  const { keybindings, setKeybinding, resetKeybindings } = useSettingsStore();
+  const [editingAction, setEditingAction] = useState<string | null>(null);
+  const addToast = useToastStore((s) => s.addToast);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Focus trap + Escape handler
   useEffect(() => {
+    if (!open) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const focusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    const initTimer = setTimeout(() => {
+      const first = dialog.querySelector<HTMLElement>(focusableSelector);
+      first?.focus();
+    }, 50);
+
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
-    if (open) window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+
+    window.addEventListener("keydown", handler);
+    return () => {
+      clearTimeout(initTimer);
+      window.removeEventListener("keydown", handler);
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -31,7 +223,7 @@ export function SettingsDialog({ open, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative w-[520px] max-h-[80vh] bg-[var(--color-bg2)] border border-[var(--color-bdl)] rounded-xl shadow-2xl flex flex-col overflow-hidden z-10">
+      <div className="relative w-[520px] max-h-[80vh] bg-[var(--color-bg2)] border border-[var(--color-bdl)] rounded-xl shadow-2xl flex flex-col overflow-hidden z-10" ref={dialogRef} role="dialog" aria-modal="true" aria-label="Settings">
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-bd)] flex-shrink-0">
           <Settings size={16} className="text-[var(--color-accent)]" />
@@ -42,14 +234,14 @@ export function SettingsDialog({ open, onClose }: Props) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[var(--color-bd)] px-4 flex-shrink-0">
-          {(["appearance", "models", "shortcuts", "profiles"] as const).map((tab) => (
+        <div className="flex border-b border-[var(--color-bd)] px-4 flex-shrink-0 overflow-x-auto">
+          {(["appearance", "models", "shortcuts", "profiles", "data", "extensions"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-3 py-2 text-[11px] font-medium border-b-2 transition-colors ${activeTab === tab ? "border-[var(--color-accent)] text-[var(--color-accent)]" : "border-transparent text-[var(--color-t3)] hover:text-[var(--color-t2)]"}`}
+              className={`px-3 py-2 text-[11px] font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? "border-[var(--color-accent)] text-[var(--color-accent)]" : "border-transparent text-[var(--color-t3)] hover:text-[var(--color-t2)]"}`}
             >
-              {tab === "appearance" ? "Appearance" : tab === "models" ? "Models" : tab === "shortcuts" ? "Shortcuts" : "Profiles"}
+              {tab === "appearance" ? "Appearance" : tab === "models" ? "Models" : tab === "shortcuts" ? "Shortcuts" : tab === "profiles" ? "Profiles" : tab === "data" ? "Data" : "Extensions"}
             </button>
           ))}
         </div>
@@ -142,39 +334,71 @@ export function SettingsDialog({ open, onClose }: Props) {
 
           {activeTab === "shortcuts" && (
             <div className="flex flex-col gap-1 text-[11px]">
-              {[
-                ["Ctrl+T", "New panel"],
-                ["Ctrl+W", "Close panel"],
-                ["Ctrl+Tab", "Next panel"],
-                ["Ctrl+1-8", "Switch to panel"],
-                ["Ctrl+B", "Toggle sidebar"],
-                ["Ctrl+Shift+F", "Focus mode"],
-                ["Ctrl+P", "Command palette"],
-                ["Ctrl+Shift+1", "Single layout"],
-                ["Ctrl+Shift+H", "Horizontal split"],
-                ["Ctrl+Shift+V", "Vertical split"],
-                ["Ctrl+Shift+G", "2×2 grid"],
-                ["Ctrl+Shift+3", "3 columns"],
-                ["Enter", "Send message"],
-                ["Shift+Enter", "New line"],
-                ["Escape", "Cancel edit"],
-              ].map(([key, desc]) => (
-                <div key={key} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-[var(--color-bgh)]">
-                  <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-bg3)] border border-[var(--color-bd)] text-[10px] font-mono text-[var(--color-t2)] min-w-[80px] text-center">
-                    {key}
-                  </kbd>
-                  <span className="text-[var(--color-t2)]">{desc}</span>
-                </div>
-              ))}
+              {DEFAULT_KEYBINDINGS.map((kb) => {
+                const current = keybindings[kb.action] || kb.default;
+                const isEditing = editingAction === kb.action;
+                const isModified = current !== kb.default;
+
+                return (
+                  <div key={kb.action} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-[var(--color-bgh)] group">
+                    <span className="flex-1 text-[var(--color-t2)]">{kb.description}</span>
+                    {isEditing ? (
+                      <input
+                        className="px-1.5 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-accent)] text-[10px] font-mono text-[var(--color-t1)] outline-none w-[100px] text-center"
+                        placeholder="Press keys…"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          e.preventDefault();
+                          if (e.key === "Escape") { setEditingAction(null); return; }
+                          if (e.key === "Control" || e.key === "Shift" || e.key === "Alt" || e.key === "Meta") return;
+                          const parts: string[] = [];
+                          if (e.ctrlKey || e.metaKey) parts.push("Ctrl");
+                          if (e.shiftKey) parts.push("Shift");
+                          if (e.altKey) parts.push("Alt");
+                          const keyName = e.key === " " ? "Space" : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+                          parts.push(keyName);
+                          const shortcut = parts.join("+");
+                          // Check for conflicts
+                          const existing = Object.entries(keybindings).find(([act, sc]) => sc === shortcut && act !== kb.action);
+                          if (existing) {
+                            addToast(`Conflict: "${shortcut}" already used by ${DEFAULT_KEYBINDINGS.find(k => k.action === existing[0])?.description || existing[0]}`, "warning");
+                            return;
+                          }
+                          setKeybinding(kb.action, shortcut);
+                          setEditingAction(null);
+                        }}
+                        onBlur={() => setEditingAction(null)}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <kbd className={`px-1.5 py-0.5 rounded border text-[10px] font-mono min-w-[80px] text-center ${isModified ? "bg-[var(--color-accent)]/10 border-[var(--color-accent)] text-[var(--color-accent)]" : "bg-[var(--color-bg3)] border-[var(--color-bd)] text-[var(--color-t2)]"}`}>
+                          {current}
+                        </kbd>
+                        <button
+                          onClick={() => setEditingAction(kb.action)}
+                          className="opacity-0 group-hover:opacity-100 text-[var(--color-t3)] hover:text-[var(--color-accent)] transition-all p-0.5"
+                          title="Edit shortcut"
+                        >
+                          <Pencil size={10} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="border-t border-[var(--color-bd)] mt-2 pt-2">
+                <button
+                  onClick={resetKeybindings}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-[var(--color-t3)] hover:text-[var(--color-t1)] hover:bg-[var(--color-bgh)] transition-colors"
+                >
+                  <RotateCcw size={11} />
+                  Reset to defaults
+                </button>
+              </div>
             </div>
           )}
 
-          {activeTab === "models" && (
-            <div className="text-[11px] text-[var(--color-t2)]">
-              <p>Model configuration is managed via the pi CLI.</p>
-              <p className="mt-1">Run <code className="bg-[var(--color-bg3)] px-1 py-0.5 rounded text-[10px]">pi models</code> to manage providers and API keys.</p>
-            </div>
-          )}
+          {activeTab === "models" && <ModelsTab />}
 
           {activeTab === "profiles" && (
             <div className="flex flex-col gap-4">
@@ -263,6 +487,10 @@ export function SettingsDialog({ open, onClose }: Props) {
               </div>
             </div>
           )}
+
+          {activeTab === "data" && <DataTab />}
+
+          {activeTab === "extensions" && <ExtensionManager />}
         </div>
       </div>
     </div>

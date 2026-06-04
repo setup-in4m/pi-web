@@ -27,6 +27,10 @@ let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let handlers = new Set<EventHandler>();
 let _connected = false;
+let _reconnectAttempt = 0;
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+let _onReconnect: (() => void) | null = null;
 
 export function isConnected(): boolean {
   return _connected;
@@ -40,9 +44,15 @@ export function connect(): void {
 
   ws.onopen = () => {
     _connected = true;
+    _reconnectAttempt = 0;
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+    // Notify reconnect listener
+    if (_onReconnect) {
+      _onReconnect();
+      _onReconnect = null;
     }
   };
 
@@ -69,10 +79,22 @@ export function connect(): void {
 
 function scheduleReconnect(): void {
   if (reconnectTimer) return;
+  _reconnectAttempt++;
+  // Exponential backoff: 1s, 2s, 4s, 8s, 16s, up to 30s
+  const baseDelay = Math.min(RECONNECT_BASE_MS * Math.pow(2, _reconnectAttempt - 1), RECONNECT_MAX_MS);
+  // Add ±20% jitter
+  const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
+  const delay = Math.round(baseDelay + jitter);
+
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connect();
-  }, 2000);
+  }, delay);
+}
+
+// Register a callback to run once on successful reconnect
+export function onReconnect(cb: () => void): void {
+  _onReconnect = cb;
 }
 
 export function subscribe(handler: EventHandler): () => void {

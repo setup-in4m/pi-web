@@ -370,10 +370,14 @@ export function SettingsDialog({ open, onClose }: Props) {
                   <Code size={12} className="inline mr-1" />
                   Code Theme
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {([
                     { value: "dark" as CodeTheme, label: "Dark" },
                     { value: "light" as CodeTheme, label: "Light" },
+                    { value: "monokai" as CodeTheme, label: "Monokai" },
+                    { value: "dracula" as CodeTheme, label: "Dracula" },
+                    { value: "nord" as CodeTheme, label: "Nord" },
+                    { value: "github" as CodeTheme, label: "GitHub" },
                   ]).map((opt) => (
                     <button
                       key={opt.value}

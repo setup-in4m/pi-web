@@ -54,6 +54,88 @@
 [data-code-theme="light"] .code-block-wrapper pre code {
   color: #24292f;
 }
+
+/* Monokai code theme */
+[data-code-theme="monokai"] .code-block-wrapper pre {
+  background: #272822 !important;
+  color: #f8f8f2;
+}
+[data-code-theme="monokai"] .code-block-wrapper > div:first-child {
+  background: #3e3d32 !important;
+  border-color: #49483e !important;
+}
+[data-code-theme="monokai"] .hljs-keyword,
+[data-code-theme="monokai"] .hljs-selector-tag { color: #f92672; }
+[data-code-theme="monokai"] .hljs-string,
+[data-code-theme="monokai"] .hljs-title { color: #e6db74; }
+[data-code-theme="monokai"] .hljs-comment { color: #75715e; }
+[data-code-theme="monokai"] .hljs-number,
+[data-code-theme="monokai"] .hljs-literal { color: #ae81ff; }
+[data-code-theme="monokai"] .hljs-attr,
+[data-code-theme="monokai"] .hljs-params { color: #a6e22e; }
+[data-code-theme="monokai"] .hljs-built_in { color: #66d9ef; }
+
+/* Dracula code theme */
+[data-code-theme="dracula"] .code-block-wrapper pre {
+  background: #282a36 !important;
+  color: #f8f8f2;
+}
+[data-code-theme="dracula"] .code-block-wrapper > div:first-child {
+  background: #343746 !important;
+  border-color: #44475a !important;
+}
+[data-code-theme="dracula"] .hljs-keyword,
+[data-code-theme="dracula"] .hljs-selector-tag { color: #ff79c6; }
+[data-code-theme="dracula"] .hljs-string { color: #f1fa8c; }
+[data-code-theme="dracula"] .hljs-title,
+[data-code-theme="dracula"] .hljs-name { color: #50fa7b; }
+[data-code-theme="dracula"] .hljs-comment { color: #6272a4; }
+[data-code-theme="dracula"] .hljs-number,
+[data-code-theme="dracula"] .hljs-literal { color: #bd93f9; }
+[data-code-theme="dracula"] .hljs-attr { color: #8be9fd; }
+[data-code-theme="dracula"] .hljs-built_in { color: #ffb86c; }
+
+/* Nord code theme */
+[data-code-theme="nord"] .code-block-wrapper pre {
+  background: #2e3440 !important;
+  color: #d8dee9;
+}
+[data-code-theme="nord"] .code-block-wrapper > div:first-child {
+  background: #3b4252 !important;
+  border-color: #434c5e !important;
+}
+[data-code-theme="nord"] .hljs-keyword,
+[data-code-theme="nord"] .hljs-selector-tag { color: #81a1c1; }
+[data-code-theme="nord"] .hljs-string { color: #a3be8c; }
+[data-code-theme="nord"] .hljs-title,
+[data-code-theme="nord"] .hljs-name { color: #8fbcbb; }
+[data-code-theme="nord"] .hljs-comment { color: #616e88; }
+[data-code-theme="nord"] .hljs-number,
+[data-code-theme="nord"] .hljs-literal { color: #b48ead; }
+[data-code-theme="nord"] .hljs-attr { color: #ebcb8b; }
+[data-code-theme="nord"] .hljs-built_in { color: #d08770; }
+
+/* GitHub light code theme */
+[data-code-theme="github"] .code-block-wrapper pre {
+  background: #ffffff !important;
+  color: #24292f;
+}
+[data-code-theme="github"] .code-block-wrapper > div:first-child {
+  background: #f6f8fa !important;
+  border-color: #d0d7de !important;
+}
+[data-code-theme="github"] .hljs-keyword,
+[data-code-theme="github"] .hljs-selector-tag { color: #cf222e; }
+[data-code-theme="github"] .hljs-string { color: #0a3069; }
+[data-code-theme="github"] .hljs-title,
+[data-code-theme="github"] .hljs-name { color: #8250df; }
+[data-code-theme="github"] .hljs-comment { color: #6e7781; }
+[data-code-theme="github"] .hljs-number,
+[data-code-theme="github"] .hljs-literal { color: #0550ae; }
+[data-code-theme="github"] .hljs-attr { color: #953800; }
+[data-code-theme="github"] .hljs-built_in { color: #0550ae; }
+
+/* Remove old light code theme that was based on attribute presence */
 [data-code-theme="light"] .hljs-keyword,
 [data-code-theme="light"] .hljs-selector-tag,
 [data-code-theme="light"] .hljs-literal,

@@ -2,8 +2,8 @@ import { create } from "zustand";
 
 export type ThemeMode = "dark" | "light" | "system";
 export type Density = "compact" | "normal" | "comfortable";
-export type AccentColor = "purple" | "blue" | "green" | "orange" | "pink" | "teal";
-export type CodeTheme = "dark" | "light";
+export type AccentColor = "purple" | "blue" | "green" | "orange" | "pink" | "teal" | "red" | "amber" | "cyan";
+export type CodeTheme = "dark" | "light" | "monokai" | "dracula" | "nord" | "github";
 export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "cascadia-code";
 export type UIFontFamily = "system" | "inter" | "geist" | "system-sans";
 
@@ -37,6 +37,9 @@ export const ACCENT_MAP: Record<AccentColor, AccentDef> = {
   orange: { name: "Orange", color: "#f97316", hover: "#fb923c", glow: "rgba(249,115,22,0.3)" },
   pink: { name: "Pink", color: "#ec4899", hover: "#f472b6", glow: "rgba(236,72,153,0.3)" },
   teal: { name: "Teal", color: "#14b8a6", hover: "#2dd4bf", glow: "rgba(20,184,166,0.3)" },
+  red: { name: "Red", color: "#ef4444", hover: "#f87171", glow: "rgba(239,68,68,0.3)" },
+  amber: { name: "Amber", color: "#f59e0b", hover: "#fbbf24", glow: "rgba(245,158,11,0.3)" },
+  cyan: { name: "Cyan", color: "#06b6d4", hover: "#22d3ee", glow: "rgba(6,182,212,0.3)" },
 };
 
 interface ThemeState {
@@ -175,10 +178,10 @@ function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, font
 }
 
 function applyCodeTheme(theme: CodeTheme) {
-  if (theme === "light") {
-    document.documentElement.setAttribute("data-code-theme", "light");
-  } else {
-    document.documentElement.removeAttribute("data-code-theme");
+  // Remove all previous code theme attributes
+  document.documentElement.removeAttribute("data-code-theme");
+  if (theme !== "dark") {
+    document.documentElement.setAttribute("data-code-theme", theme);
   }
 }
 

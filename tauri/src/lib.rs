@@ -35,10 +35,18 @@ pub fn run() {
                         .join("server");
                     let server_entry = server_dir.join("index.js");
 
+                    // Strip \\?\ prefix — Node.js can't handle extended paths
+                    let server_str = server_entry.to_string_lossy().to_string();
+                    let clean_path = server_str.strip_prefix("\\\\?\\").unwrap_or(&server_str).to_string();
+                    // Also clean the working directory
+                    let dir_str = server_dir.to_string_lossy().to_string();
+                    let clean_dir = dir_str.strip_prefix("\\\\?\\").unwrap_or(&dir_str).to_string();
+
                     if server_entry.exists() {
-                        println!("Starting Node server: {}", server_entry.display());
+                        println!("Starting Node server: {}", clean_path);
                         match std::process::Command::new("node")
-                            .arg(&server_entry)
+                            .arg(&clean_path)
+                            .current_dir(&clean_dir)
                             .spawn()
                         {
                             Ok(mut child) => {
@@ -50,7 +58,7 @@ pub fn run() {
                             }
                         }
                     } else {
-                        eprintln!("Server not found at {} — connect to locally running server", server_entry.display());
+                        eprintln!("Server not found at {} — connect to locally running server", clean_path);
                     }
                 });
             }

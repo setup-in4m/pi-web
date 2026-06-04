@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import express from "express";
 import { PORT } from "./config.js";
 import { init as initWs } from "./ws/handler.js";
@@ -28,7 +29,12 @@ app.use("/api", dataRoutes);
 app.use("/api", extensionRoutes);
 
 // Serve static client in dev (if built) or fallback
-const clientDist = join(__dirname, "..", "..", "client", "dist");
+// In production (bundled with Tauri): server is at resources/server/, client at resources/client/
+// Try multiple paths to find client dist
+let clientDist = join(__dirname, "..", "client");
+if (!existsSync(join(clientDist, "index.html"))) {
+  clientDist = join(__dirname, "..", "..", "client", "dist");
+}
 app.use(express.static(clientDist));
 // Catch-all: serve client or API fallback
 app.use((_req, res) => {

@@ -34,7 +34,8 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../server/dist": "server"
+      "../server/dist": "server",
+      "../client/dist": "client"
     },
     "icon": [
       "icons/icon.ico",
@@ -59,8 +60,6 @@
     }
   },
   "plugins": {
-    "dialog": {},
-    "global-shortcut": {},
     "shell": {
       "open": true
     }

@@ -1,4 +1,6 @@
 use tauri::{Emitter, Manager};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
+use tauri::tray::TrayIconBuilder;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -106,6 +108,80 @@ pub fn run() {
                         }
                     }
                 });
+            }
+
+            // ── System tray ────────────────────────────────────
+            {
+                let w = window.clone();
+
+                let show_hide = MenuItemBuilder::with_id("show_hide", "Show/Hide Window").build(app)?;
+                let separator1 = PredefinedMenuItem::separator(app)?;
+                let new_session = MenuItemBuilder::with_id("new_session", "New Session").build(app)?;
+                let separator2 = PredefinedMenuItem::separator(app)?;
+                let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+
+                let tray_menu = MenuBuilder::new(app)
+                    .item(&show_hide)
+                    .item(&separator1)
+                    .item(&new_session)
+                    .item(&separator2)
+                    .item(&quit)
+                    .build()?;
+
+                // Load tray icon from file
+                let icon_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("icons/icon.png");
+                let icon = tauri::image::Image::from_path(&icon_path)
+                    .expect("Failed to load tray icon");
+
+                let _tray = TrayIconBuilder::with_id("pi-web-tray")
+                    .icon(icon)
+                    .tooltip("pi")
+                    .menu(&tray_menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(move |app, event| {
+                        match event.id().as_ref() {
+                            "show_hide" => {
+                                if let Some(win) = app.get_webview_window("main") {
+                                    if win.is_visible().unwrap_or(true) {
+                                        let _ = win.hide();
+                                    } else {
+                                        let _ = win.show();
+                                        let _ = win.set_focus();
+                                    }
+                                }
+                            }
+                            "new_session" => {
+                                let _ = app.emit("new-session", ());
+                                if let Some(win) = app.get_webview_window("main") {
+                                    let _ = win.show();
+                                    let _ = win.set_focus();
+                                }
+                            }
+                            "quit" => {
+                                // Clean up lock file before exit
+                                let lock_path = std::env::temp_dir().join(LOCK_FILE);
+                                let _ = std::fs::remove_file(lock_path);
+                                app.exit(0);
+                            }
+                            _ => {}
+                        }
+                    })
+                    .on_tray_icon_event(move |_tray, event| {
+                        if let tauri::tray::TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Left,
+                            button_state: tauri::tray::MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            if w.is_visible().unwrap_or(true) {
+                                let _ = w.hide();
+                            } else {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                        }
+                    })
+                    .build(app)?;
             }
 
             Ok(())

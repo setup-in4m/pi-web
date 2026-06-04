@@ -4,7 +4,7 @@ import { useModelStore } from "../../stores/modelStore";
 import { TokenBar } from "./TokenBar";
 import { ProfileSelector } from "./ProfileSelector";
 import { ModelSelector } from "./ModelSelector";
-import { Download, Copy, FileText, Code, ChevronDown } from "lucide-react";
+import { Download, Copy, FileText, Code, ChevronDown, Share2 } from "lucide-react";
 import { useToastStore } from "../../stores/toastStore";
 import { useState } from "react";
 
@@ -19,6 +19,7 @@ export function PanelHeader({ panel, panelIndex }: Props) {
   const { models, providers, recentModels, addRecentModel } = useModelStore();
   const addToast = useToastStore((s) => s.addToast);
   const [exportOpen, setExportOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const name = panel.title || (panel.workspacePath ? panel.workspacePath.split(/[/\\]/).pop() : "New panel");
   const currentModel = panel.model ? models.find(m => m.providerId === panel.model!.provider && m.modelId === panel.model!.modelId) : null;
@@ -91,6 +92,32 @@ export function PanelHeader({ panel, panelIndex }: Props) {
                         <Copy size={12} />
                         Copy Transcript
                       </button>
+                      <div className="border-t border-[var(--color-bd)] my-0.5" />
+                      <button
+                        onClick={async () => {
+                          setExportOpen(false);
+                          setSharing(true);
+                          try {
+                            const res = await fetch(`/api/session/${encodeURIComponent(panel.sessionKey!)}/share`);
+                            const data = await res.json();
+                            if (data.url) {
+                              await navigator.clipboard.writeText(data.url);
+                              addToast(`Gist created — URL copied!`, "success");
+                            } else if (data.error) {
+                              addToast(data.error, "error");
+                            }
+                          } catch (e: any) {
+                            addToast(e.message || "Failed to share", "error");
+                          } finally {
+                            setSharing(false);
+                          }
+                        }}
+                        disabled={sharing}
+                        className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-[var(--color-t2)] hover:bg-[var(--color-bgh)] hover:text-[var(--color-t1)] transition-colors w-full text-left disabled:opacity-50"
+                      >
+                        <Share2 size={12} />
+                        {sharing ? "Creating Gist…" : "Share via Gist"}
+                      </button>
                     </div>
                   </>
                 )}
@@ -108,18 +135,34 @@ export function PanelHeader({ panel, panelIndex }: Props) {
               onAddRecent={(provider, modelId) => addRecentModel(provider, modelId)}
             />
 
-            {/* Thinking selector */}
-            <select
-              value={panel.thinking}
-              onChange={(e) => setThinking(panelIndex, e.target.value)}
-              className="bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-1 py-0 text-[9px] font-sans cursor-pointer outline-none focus:border-[var(--color-accent)]"
-              title="Thinking level"
-            >
-              <option value="off">🧠 off</option>
-              <option value="low">low</option>
-              <option value="medium">med</option>
-              <option value="high">high</option>
-            </select>
+            {/* Thinking selector with level indicator */}
+            <div className="flex items-center gap-0.5">
+              {panel.thinking !== "off" && (
+                <span
+                  className={`px-1 rounded text-[7px] font-bold uppercase leading-none ${
+                    panel.thinking === "high"
+                      ? "bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
+                      : panel.thinking === "medium"
+                      ? "bg-[var(--color-warning)]/15 text-[var(--color-warning)]"
+                      : "bg-[#3b82f6]/15 text-[#3b82f6]"
+                  }`}
+                  title={`Thinking: ${panel.thinking}`}
+                >
+                  {panel.thinking}
+                </span>
+              )}
+              <select
+                value={panel.thinking}
+                onChange={(e) => setThinking(panelIndex, e.target.value)}
+                className="bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-1 py-0 text-[9px] font-sans cursor-pointer outline-none focus:border-[var(--color-accent)]"
+                title="Thinking level"
+              >
+                <option value="off">🧠 off</option>
+                <option value="low">low</option>
+                <option value="medium">med</option>
+                <option value="high">high</option>
+              </select>
+            </div>
           </>
         )}
       </div>

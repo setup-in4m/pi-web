@@ -294,3 +294,87 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+// ── Copy transcript as plain text ────────────────────────
+
+router.get("/session/:key/copy", async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key);
+    const entry = sessions.get(key);
+    if (!entry) return res.status(404).json({ error: "Session not loaded", code: "NOT_FOUND" });
+
+    const msgs = (entry.session as any).messages || [];
+    const storedSession = store.getSession(key);
+    const title = storedSession?.title || "pi session";
+
+    let text = `${title}\n${new Date().toISOString()}\n${'─'.repeat(60)}\n\n`;
+    for (const m of msgs) {
+      const role = m.role === "user" ? "You" : "pi";
+      const content = typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.map((c: any) => c.text || "").join("") : "";
+      // Strip HTML tags for plain text
+      const plain = content.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#039;/g, "'");
+      text += `${role}: ${plain}\n\n`;
+    }
+
+    res.setHeader("Content-Type", "text/plain");
+    res.send(text);
+  } catch (e: any) {
+    sendError(res, e);
+  }
+});
+
+// ── Share via GitHub Gist ────────────────────────────────
+
+router.get("/session/:key/share", async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key);
+    const entry = sessions.get(key);
+    if (!entry) return res.status(404).json({ error: "Session not loaded", code: "NOT_FOUND" });
+
+    const msgs = (entry.session as any).messages || [];
+    const storedSession = store.getSession(key);
+    const title = storedSession?.title || "pi session";
+
+    // Build markdown
+    let md = `# ${title}\n\n`;
+    md += `*Shared from pi-web on ${new Date().toISOString()}*\n\n---\n\n`;
+    for (const m of msgs) {
+      const role = m.role === "user" ? "**You**" : "**pi**";
+      const content = typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.map((c: any) => c.text || "").join("") : "";
+      md += `### ${role}\n\n${content}\n\n---\n\n`;
+    }
+
+    // Try creating anonymous Gist
+    try {
+      const apiRes = await fetch("https://api.github.com/gists", {
+        method: "POST",
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          description: `pi-web: ${title}`,
+          public: true,
+          files: {
+            [`${title.replace(/[^a-zA-Z0-9]/g, "_")}.md`]: {
+              content: md,
+            },
+          },
+        }),
+      });
+
+      if (apiRes.ok) {
+        const gist = await apiRes.json() as any;
+        res.json({ url: gist.html_url, id: gist.id });
+        return;
+      }
+      // Fall through to error
+      res.json({ error: `GitHub API error: ${apiRes.status}`, markdown: md });
+    } catch (e: any) {
+      // Network error — return markdown for manual sharing
+      res.json({ error: `Gist creation failed: ${e.message}. Copy markdown manually.`, markdown: md });
+    }
+  } catch (e: any) {
+    sendError(res, e);
+  }
+});

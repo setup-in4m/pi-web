@@ -1,7 +1,7 @@
 # Progress
 
 ## Status
-Nearly Complete — 8 items remain
+Nearly Complete — 6 items remain
 
 ## Completed Tasks
 
@@ -56,7 +56,7 @@ Nearly Complete — 8 items remain
 - [ ] Math rendering (KaTeX)
 - [x] Tool result rendering: line numbers for read, diff views for write/edit
 - [x] Thinking token count vs visible output
-- [ ] Think level indicator
+- [x] Think level indicator
 - [x] Pin message to top
 
 ### Phase 4 — Model & Token UX
@@ -82,7 +82,7 @@ Nearly Complete — 8 items remain
 ### Phase 7 — Settings & Themes
 - [ ] Font family selector
 - [ ] Code theme toggle (independent of UI theme)
-- [ ] Share via GitHub Gist
+- [x] Share via GitHub Gist
 
 ### Phase 8 — Polish & Testing
 - [x] Lazy-load sidebar (sessions fetched on expand)

@@ -30,15 +30,21 @@ function getEnabledExtensions(): string[] {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const manifestPath = join(EXTENSIONS_DIR, entry.name, "package.json");
+      const configPath = join(EXTENSIONS_DIR, entry.name, "config.json");
+      let isEnabled = true;
       if (existsSync(manifestPath)) {
         try {
           const pkg = JSON.parse(readFileSync(manifestPath, "utf-8"));
-          if (pkg.enabled !== false) {
-            enabled.push(join(EXTENSIONS_DIR, entry.name));
-          }
-        } catch {
-          // skip broken manifests
-        }
+          if (pkg.enabled === false) isEnabled = false;
+        } catch { /* skip broken */ }
+      } else if (existsSync(configPath)) {
+        try {
+          const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
+          if (cfg.enabled === false) isEnabled = false;
+        } catch { /* skip broken */ }
+      }
+      if (isEnabled) {
+        enabled.push(join(EXTENSIONS_DIR, entry.name));
       }
     }
   } catch {

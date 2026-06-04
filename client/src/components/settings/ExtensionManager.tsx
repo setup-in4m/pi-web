@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Puzzle, Download, ToggleLeft, ToggleRight, RefreshCw } from "lucide-react";
-import { api } from "../../lib/api";
+import { Puzzle, Download, ToggleLeft, ToggleRight, RefreshCw, AlertTriangle } from "lucide-react";
+import { getExtensions, installExtension, toggleExtension } from "../../lib/api";
 
 interface Extension {
   id: string;
@@ -21,10 +21,10 @@ export function ExtensionManager() {
     setLoading(true);
     setError("");
     try {
-      const data = await api.get<{ extensions: Extension[] }>("/api/extensions");
+      const data = await getExtensions();
       setExtensions(data.extensions || []);
     } catch (e: any) {
-      setError(e.message);
+      setError(e.message || "Failed to load extensions");
     }
     setLoading(false);
   };
@@ -36,7 +36,7 @@ export function ExtensionManager() {
     setInstalling(true);
     setError("");
     try {
-      await api.post("/api/extensions/install", { path: installPath.trim() });
+      await installExtension(installPath.trim());
       setInstallPath("");
       await fetchExtensions();
     } catch (e: any) {
@@ -50,7 +50,7 @@ export function ExtensionManager() {
       prev.map((ext) => (ext.id === id ? { ...ext, enabled: !enabled } : ext))
     );
     try {
-      await api.post(`/api/extensions/${encodeURIComponent(id)}/toggle`, { enabled: !enabled });
+      await toggleExtension(id, !enabled);
     } catch (e: any) {
       // Revert on error
       setExtensions((prev) =>
@@ -105,8 +105,9 @@ export function ExtensionManager() {
       </div>
 
       {error && (
-        <div className="text-[10px] text-[var(--color-danger)] px-3 py-1.5 rounded border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/5">
-          {error}
+        <div className="flex items-start gap-2 text-[10px] text-[var(--color-danger)] px-3 py-1.5 rounded border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/5">
+          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
       )}
 

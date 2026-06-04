@@ -28,7 +28,11 @@ function listLocalExtensions(): ExtensionInfo[] {
     const entries = readdirSync(EXTENSIONS_DIR, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const manifestPath = join(EXTENSIONS_DIR, entry.name, "package.json");
+
+      // Try package.json first, then config.json
+      let manifestPath = join(EXTENSIONS_DIR, entry.name, "package.json");
+      let altPath = join(EXTENSIONS_DIR, entry.name, "config.json");
+
       if (existsSync(manifestPath)) {
         try {
           const pkg = JSON.parse(readFileSync(manifestPath, "utf-8"));
@@ -42,13 +46,27 @@ function listLocalExtensions(): ExtensionInfo[] {
         } catch (e: any) {
           console.error(`[extensions] Failed to parse ${manifestPath}:`, e.message);
         }
+      } else if (existsSync(altPath)) {
+        try {
+          const cfg = JSON.parse(readFileSync(altPath, "utf-8"));
+          result.push({
+            id: entry.name,
+            name: cfg.displayName || cfg.name || entry.name,
+            version: cfg.version || "0.0.0",
+            enabled: cfg.enabled !== false,
+            description: cfg.description,
+          });
+        } catch (e: any) {
+          console.error(`[extensions] Failed to parse ${altPath}:`, e.message);
+        }
       } else {
+        // Extension without manifest — list it anyway
         result.push({
           id: entry.name,
           name: entry.name,
           version: "0.0.0",
           enabled: true,
-          description: "No package.json",
+          description: "No manifest",
         });
       }
     }

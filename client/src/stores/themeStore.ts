@@ -113,6 +113,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       const s = get();
       const font = FONT_MAP[fontFamily];
       document.documentElement.style.setProperty("--font-mono", font.css);
+      document.documentElement.setAttribute("data-font-family", fontFamily);
       applyCodeTheme(s.codeTheme);
       persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily, codeTheme: s.codeTheme });
     },
@@ -139,6 +140,7 @@ function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, font
   // Font family
   const font = FONT_MAP[fontFamily];
   document.documentElement.style.setProperty("--font-mono", font.css);
+  document.documentElement.setAttribute("data-font-family", fontFamily);
 
   // Code theme
   applyCodeTheme(codeTheme);

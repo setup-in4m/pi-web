@@ -6,7 +6,7 @@ import { ProfileSelector } from "./ProfileSelector";
 import { ModelSelector } from "./ModelSelector";
 import { Download, Copy, FileText, Code, ChevronDown, Share2 } from "lucide-react";
 import { useToastStore } from "../../stores/toastStore";
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 
 interface Props {
   panel: PanelData;
@@ -18,16 +18,53 @@ export function PanelHeader({ panel, panelIndex }: Props) {
   const setThinking = usePanelStore((s) => s.setThinking);
   const { models, providers, recentModels, addRecentModel } = useModelStore();
   const addToast = useToastStore((s) => s.addToast);
+  const setTitle = usePanelStore((s) => s.setTitle);
   const [exportOpen, setExportOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const name = panel.title || (panel.workspacePath ? panel.workspacePath.split(/[/\\]/).pop() : "New panel");
+
+  const startRename = useCallback(() => {
+    setTitleDraft(panel.title || "");
+    setEditingTitle(true);
+    setTimeout(() => titleInputRef.current?.select(), 10);
+  }, [panel.title]);
+
+  const commitRename = useCallback(() => {
+    setEditingTitle(false);
+    if (titleDraft.trim() && titleDraft.trim() !== name) {
+      setTitle(panelIndex, titleDraft.trim());
+    }
+  }, [titleDraft, name, panelIndex, setTitle]);
   const currentModel = panel.model ? models.find(m => m.providerId === panel.model!.provider && m.modelId === panel.model!.modelId) : null;
 
   return (
     <div className="flex items-center gap-2 px-2.5 py-0.5 bg-[var(--color-bg2)] border-b border-[var(--color-bd)] text-[10px] text-[var(--color-t3)] flex-shrink-0 min-h-[22px] overflow-hidden">
       <span className="text-[var(--color-accent)]">◆</span>
-      <span className="text-[var(--color-t2)] font-medium truncate">{name}</span>
+      {editingTitle ? (
+        <input
+          ref={titleInputRef}
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitRename();
+            if (e.key === "Escape") { setEditingTitle(false); }
+          }}
+          className="bg-[var(--color-bg3)] border border-[var(--color-accent)] rounded px-1 py-0 text-[10px] text-[var(--color-t1)] font-medium outline-none w-[120px]"
+        />
+      ) : (
+        <span
+          className="text-[var(--color-t2)] font-medium truncate cursor-pointer hover:text-[var(--color-t1)] select-none"
+          onDoubleClick={startRename}
+          title="Double-click to rename"
+        >
+          {name}
+        </span>
+      )}
 
       {/* Token bar — contextual */}
       <TokenBar

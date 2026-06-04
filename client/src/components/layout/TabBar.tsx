@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePanelStore } from "../../stores/panelStore";
 import { useLayoutStore, type LayoutPreset } from "../../stores/layoutStore";
 import { useModelStore } from "../../stores/modelStore";
@@ -6,9 +6,9 @@ import { useWorkflowStore } from "../../stores/workflowStore";
 import { Plus, X, GripVertical, Square, Columns2, Rows2, Grid2x2, Columns3, Workflow } from "lucide-react";
 
 const LAYOUT_OPTIONS: { preset: LayoutPreset; icon: typeof Square; label: string }[] = [
-  { preset: "single", icon: Square, label: "Single panel" },
-  { preset: "2h", icon: Columns2, label: "Split horizontal" },
-  { preset: "2v", icon: Rows2, label: "Split vertical" },
+  { preset: "single", icon: Square, label: "Single" },
+  { preset: "2h", icon: Columns2, label: "Side by side" },
+  { preset: "2v", icon: Rows2, label: "Stacked" },
   { preset: "2x2", icon: Grid2x2, label: "2×2 grid" },
   { preset: "col3", icon: Columns3, label: "3 columns" },
 ];
@@ -20,6 +20,7 @@ export function TabBar() {
   const removePanel = usePanelStore((s) => s.removePanel);
   const setActive = usePanelStore((s) => s.setActive);
   const movePanel = usePanelStore((s) => s.movePanel);
+  const setTitle = usePanelStore((s) => s.setTitle);
   const spawnFromPanel = usePanelStore((s) => s.spawnFromPanel);
   const runOnOtherModel = usePanelStore((s) => s.runOnOtherModel);
   const closeOtherPanels = usePanelStore((s) => s.closeOtherPanels);
@@ -29,6 +30,10 @@ export function TabBar() {
   const { open: workflowOpen, setOpen: setWorkflowOpen } = useWorkflowStore();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const dragIndex = useRef<number | null>(null);
 
   useEffect(() => {
     const handler = () => setContextMenu(null);
@@ -38,9 +43,42 @@ export function TabBar() {
     }
   }, [contextMenu]);
 
+  // Focus the rename input when entering edit mode
+  useEffect(() => {
+    if (editingIndex !== null && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingIndex]);
+
+  const startRename = (e: React.MouseEvent, idx: number, panel: typeof panels[0]) => {
+    e.stopPropagation();
+    setEditingIndex(idx);
+    setEditDraft(panel.title || "");
+  };
+
+  const commitRename = (idx: number) => {
+    if (editDraft.trim()) {
+      setTitle(idx, editDraft.trim());
+    }
+    setEditingIndex(null);
+    setEditDraft("");
+  };
+
+  // Drag-and-drop via grip handle only
   const onDragStart = (e: React.DragEvent, idx: number) => {
+    dragIndex.current = idx;
     e.dataTransfer.setData("text/plain", String(idx));
     e.dataTransfer.effectAllowed = "move";
+    // Set a small transparent drag image so the cursor doesn't obscure
+    const ghost = document.createElement("div");
+    ghost.style.width = "1px";
+    ghost.style.height = "1px";
+    ghost.style.position = "absolute";
+    ghost.style.top = "-9999px";
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 0, 0);
+    setTimeout(() => ghost.remove(), 0);
   };
 
   const onDragOver = (e: React.DragEvent) => {
@@ -48,12 +86,27 @@ export function TabBar() {
     e.dataTransfer.dropEffect = "move";
   };
 
+  const onDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).classList.add("ring-1", "ring-[var(--color-accent)]");
+  };
+
+  const onDragLeave = (e: React.DragEvent) => {
+    (e.currentTarget as HTMLElement).classList.remove("ring-1", "ring-[var(--color-accent)]");
+  };
+
   const onDrop = (e: React.DragEvent, toIdx: number) => {
     e.preventDefault();
-    const fromIdx = parseInt(e.dataTransfer.getData("text/plain"), 10);
-    if (!isNaN(fromIdx) && fromIdx !== toIdx) {
+    (e.currentTarget as HTMLElement).classList.remove("ring-1", "ring-[var(--color-accent)]");
+    const fromIdx = dragIndex.current;
+    dragIndex.current = null;
+    if (fromIdx != null && fromIdx !== toIdx) {
       movePanel(fromIdx, toIdx);
     }
+  };
+
+  const onDragEnd = () => {
+    dragIndex.current = null;
   };
 
   const handleContextMenu = (e: React.MouseEvent, index: number) => {
@@ -61,14 +114,22 @@ export function TabBar() {
     setContextMenu({ x: e.clientX, y: e.clientY, index });
   };
 
+  const getTabLabel = (p: typeof panels[0]) => {
+    const wsName = p.workspacePath ? p.workspacePath.split(/[/\\]/).pop() : null;
+    if (p.title && wsName) return `${p.title} · ${wsName}`;
+    if (p.title) return p.title;
+    if (wsName) return wsName;
+    return "New tab";
+  };
+
   return (
     <div className="flex items-center gap-0.5 px-2 py-0.5 bg-[var(--color-bg2)] border-b border-[var(--color-bd)] min-h-[28px] flex-shrink-0 overflow-x-auto">
       {panels.map((p, i) => (
         <div
           key={p.id}
-          draggable
-          onDragStart={(e) => onDragStart(e, i)}
           onDragOver={onDragOver}
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
           onDrop={(e) => onDrop(e, i)}
           onClick={() => setActive(i)}
           onContextMenu={(e) => handleContextMenu(e, i)}
@@ -82,10 +143,43 @@ export function TabBar() {
               : "bg-[var(--color-bg3)] text-[var(--color-t2)] border border-transparent hover:bg-[var(--color-bgh)] hover:text-[var(--color-t1)]"
             }`}
         >
-          <GripVertical size={10} className="text-[var(--color-t3)] flex-shrink-0" aria-hidden="true" />
-          <span className="max-w-[120px] truncate">
-            {p.title || (p.workspacePath ? p.workspacePath.split(/[/\\]/).pop() : "New tab")}
+          {/* Drag handle */}
+          <span
+            draggable
+            onDragStart={(e) => onDragStart(e, i)}
+            onDragEnd={onDragEnd}
+            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-[var(--color-t3)] hover:text-[var(--color-accent)] transition-colors"
+            aria-label={`Drag panel ${i + 1}`}
+            tabIndex={-1}
+          >
+            <GripVertical size={10} aria-hidden="true" />
           </span>
+
+          {/* Tab label with inline rename on double-click */}
+          {editingIndex === i ? (
+            <input
+              ref={editInputRef}
+              value={editDraft}
+              onChange={(e) => setEditDraft(e.target.value)}
+              onBlur={() => commitRename(i)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") commitRename(i);
+                if (e.key === "Escape") { setEditingIndex(null); setEditDraft(""); }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[var(--color-bg)] border border-[var(--color-accent)] rounded px-1 py-0 text-[10px] text-[var(--color-t1)] outline-none w-[140px]"
+            />
+          ) : (
+            <span
+              className="max-w-[160px] truncate cursor-pointer"
+              onDoubleClick={(e) => startRename(e, i, p)}
+              title={`${getTabLabel(p)} — double-click to rename`}
+            >
+              {getTabLabel(p)}
+            </span>
+          )}
+
           {p.streaming && (
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)] animate-pulse flex-shrink-0" aria-label="Streaming" />
           )}

@@ -14,7 +14,7 @@ export function Panel({ panel, isActive, panelIndex }: Props) {
 
   return (
     <div
-      className={`flex flex-col bg-[var(--color-bg)] overflow-hidden min-w-0 min-h-0 ${isActive ? "shadow-[inset_0_0_0_1px_var(--color-accent)]" : ""}`}
+      className={`flex flex-col h-full bg-[var(--color-bg)] overflow-hidden min-w-0 min-h-0 ${isActive ? "shadow-[inset_0_0_0_1px_var(--color-accent)]" : ""}`}
     >
       <PanelHeader panel={panel} panelIndex={panelIndex} />
       <ChatView panel={panel} />

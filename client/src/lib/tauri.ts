@@ -153,7 +153,10 @@ export async function maximizeWindow(): Promise<void> {
 }
 
 export async function closeWindow(): Promise<void> {
-  if (!isTauri) return;
+  if (!isTauri) {
+    window.close();
+    return;
+  }
 
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");

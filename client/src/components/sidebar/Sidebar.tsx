@@ -3,13 +3,14 @@ import { FolderOpen, Plus, Folder, ChevronRight, MessageSquare, Settings } from 
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useModelStore } from "../../stores/modelStore";
 import { usePanelStore } from "../../stores/panelStore";
+import { useToastStore } from "../../stores/toastStore";
 import * as api from "../../lib/api";
 import { isConnected } from "../../lib/ws";
 
 export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { workspaces, loading, addWorkspace, refreshWorkspace, usageCache } = useWorkspaceStore();
   const { models } = useModelStore();
-  const { panels, activeIndex, setActive, openExistingSession, setWorkspace } = usePanelStore();
+  const { panels, openExistingSession } = usePanelStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [version, setVersion] = useState("");
 
@@ -26,6 +27,8 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
     });
   };
 
+  const addToast = useToastStore((s) => s.addToast);
+
   const handleBrowse = async () => {
     try {
       const result = await api.browseFolder();
@@ -33,24 +36,34 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         await addWorkspace(result.path);
         setExpanded((prev) => new Set(prev).add(result.path!));
       }
-    } catch {
-      // user cancelled or error
+    } catch (e: any) {
+      addToast(e.message || "Failed to browse folder", "error");
     }
   };
 
   const handleNewThread = async (workspacePath: string) => {
-    const activePanel = panels[activeIndex];
-    if (!activePanel) return;
-
-    setWorkspace(activeIndex, workspacePath);
-    setActive(activeIndex);
+    const state = usePanelStore.getState();
+    if (state.panels.length >= 8) {
+      addToast("Max 8 panels", "warning");
+      return;
+    }
+    state.addPanel();
+    const newIndex = usePanelStore.getState().panels.length - 1;
+    usePanelStore.getState().setWorkspace(newIndex, workspacePath);
   };
 
   const handleOpenSession = async (workspacePath: string, sessionId: string) => {
-    const activePanel = panels[activeIndex];
-    if (!activePanel) return;
-
-    await openExistingSession(activeIndex, workspacePath, sessionId);
+    // Open session in a new panel/tab instead of replacing current
+    const state = usePanelStore.getState();
+    if (state.panels.length >= 8) {
+      addToast("Max 8 panels", "warning");
+      return;
+    }
+    state.addPanel();
+    // Set workspace on the new panel before opening session
+    const newIndex = usePanelStore.getState().panels.length - 1;
+    usePanelStore.getState().setWorkspace(newIndex, workspacePath);
+    await openExistingSession(newIndex, workspacePath, sessionId);
     refreshWorkspace(workspacePath);
   };
 
@@ -101,10 +114,6 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         {!loading && workspaces.length === 0 && (
           <div className="p-4 text-center text-[var(--color-t3)] text-[10px]">
             No folders open.
-            <br />
-            <button onClick={handleBrowse} className="text-[var(--color-accent)] hover:underline mt-1">
-              Open a folder
-            </button>
           </div>
         )}
 
@@ -145,7 +154,7 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                     <div className="px-2 py-1 text-[9px] text-[var(--color-t3)]">No sessions yet</div>
                   )}
                   {ws.sessions.map((s) => {
-                    const isActive = panels[activeIndex]?.sessionId === s.id;
+                    const isActive = panels.some(p => p.sessionId === s.id);
                     const cacheKey = `${ws.path}::${s.id}`;
                     const usage = usageCache[cacheKey];
                     return (

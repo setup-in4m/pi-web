@@ -141,6 +141,16 @@ body,
   border-radius: var(--radius, 4px);
 }
 
+.code-block-wrapper pre,
+.code-block-wrapper code,
+pre code,
+pre,
+code[class*="language-"],
+pre[class*="language-"],
+.hljs {
+  font-family: var(--font-mono) !important;
+}
+
 /* Screen-reader-only utility */
 .sr-only {
   position: absolute;

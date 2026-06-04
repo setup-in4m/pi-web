@@ -3,6 +3,59 @@ import type { SessionRecord } from "../store.js";
 import * as store from "../store.js";
 import { agentDir, authStorage, modelRegistry } from "../config.js";
 import { broadcast } from "../ws/handler.js";
+import { readdirSync, existsSync, readFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+
+const EXTENSIONS_DIR = join(agentDir, "extensions");
+
+interface ExtensionInfo {
+  id: string;
+  name: string;
+  version: string;
+  enabled: boolean;
+  description?: string;
+}
+
+function ensureExtensionsDir() {
+  if (!existsSync(EXTENSIONS_DIR)) {
+    mkdirSync(EXTENSIONS_DIR, { recursive: true });
+  }
+}
+
+function getEnabledExtensions(): string[] {
+  ensureExtensionsDir();
+  const enabled: string[] = [];
+  try {
+    const entries = readdirSync(EXTENSIONS_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const manifestPath = join(EXTENSIONS_DIR, entry.name, "package.json");
+      if (existsSync(manifestPath)) {
+        try {
+          const pkg = JSON.parse(readFileSync(manifestPath, "utf-8"));
+          if (pkg.enabled !== false) {
+            enabled.push(join(EXTENSIONS_DIR, entry.name));
+          }
+        } catch {
+          // skip broken manifests
+        }
+      }
+    }
+  } catch {
+    // directory missing or unreadable
+  }
+  return enabled;
+}
+
+function buildSessionConfig(overrides: Record<string, unknown> = {}) {
+  return {
+    agentDir,
+    authStorage,
+    modelRegistry,
+    extensions: getEnabledExtensions(),
+    ...overrides,
+  };
+}
 
 interface ActiveSession {
   runtime: Awaited<ReturnType<typeof createAgentSession>>;
@@ -34,13 +87,10 @@ export async function open(workspacePath: string, sessionId: string): Promise<{ 
   const info = infos.find(i => i.id === sessionId);
   if (!info || !info.path) throw new Error("Session file not found");
 
-  const runtime = await createAgentSession({
+  const runtime = await createAgentSession(buildSessionConfig({
     cwd: workspacePath,
     sessionManager: SessionManager.open(info.path),
-    agentDir,
-    authStorage,
-    modelRegistry,
-  });
+  }));
   const session = (runtime as any).session;
   if (!session) throw new Error("Failed to create session");
 
@@ -64,13 +114,10 @@ export async function open(workspacePath: string, sessionId: string): Promise<{ 
 
 export async function create(workspacePath: string, title?: string): Promise<{ sessionId: string; key: string; title: string }> {
   const sm = SessionManager.create(workspacePath);
-  const runtime = await createAgentSession({
+  const runtime = await createAgentSession(buildSessionConfig({
     cwd: workspacePath,
     sessionManager: sm,
-    agentDir,
-    authStorage,
-    modelRegistry,
-  });
+  }));
   const session = (runtime as any).session;
   if (!session) throw new Error("Failed to create session");
 
@@ -208,13 +255,10 @@ export async function spawnSubAgent(
 
   // Create a new session in the same workspace
   const sm = SessionManager.create(parent.workspacePath);
-  const runtime = await createAgentSession({
+  const runtime = await createAgentSession(buildSessionConfig({
     cwd: parent.workspacePath,
     sessionManager: sm,
-    agentDir,
-    authStorage,
-    modelRegistry,
-  });
+  }));
   const subSession = (runtime as any).session;
   if (!subSession) throw new Error("Failed to create sub-agent session");
 

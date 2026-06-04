@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Settings, Sun, Moon, Monitor, Palette, Type, User, Plus, Trash2, Pencil, RotateCcw, Database, Download, Trash, Zap, Code } from "lucide-react";
-import { useThemeStore, type ThemeMode, type AccentColor, ACCENT_MAP, type Density, type FontFamily, type CodeTheme, FONT_MAP } from "../../stores/themeStore";
+import { useThemeStore, type ThemeMode, type AccentColor, ACCENT_MAP, type Density, type FontFamily, type UIFontFamily, type CodeTheme, FONT_MAP, UI_FONT_MAP } from "../../stores/themeStore";
 import { useProfileStore } from "../../stores/profileStore";
 import { useModelStore } from "../../stores/modelStore";
 import { useSettingsStore, DEFAULT_KEYBINDINGS } from "../../stores/settingsStore";
@@ -164,7 +164,7 @@ function DataTab() {
 }
 
 export function SettingsDialog({ open, onClose }: Props) {
-  const { mode, accent, density, fontScale, fontFamily, codeTheme, setMode, setAccent, setDensity, setFontScale, setFontFamily, setCodeTheme } = useThemeStore();
+  const { mode, accent, density, fontScale, fontFamily, uiFontFamily, codeTheme, setMode, setAccent, setDensity, setFontScale, setFontFamily, setUIFontFamily, setCodeTheme } = useThemeStore();
   const { profiles, addProfile, removeProfile } = useProfileStore();
   const { models } = useModelStore();
   const [newProfileName, setNewProfileName] = useState("");
@@ -330,11 +330,11 @@ export function SettingsDialog({ open, onClose }: Props) {
                 />
               </div>
 
-              {/* Font family */}
+              {/* Font family — code */}
               <div>
                 <div className="text-[11px] font-medium text-[var(--color-t2)] mb-2">
                   <Type size={12} className="inline mr-1" />
-                  Editor Font
+                  Code Font
                 </div>
                 <select
                   value={fontFamily}
@@ -342,6 +342,23 @@ export function SettingsDialog({ open, onClose }: Props) {
                   className="w-full bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-2 py-1.5 text-[11px] font-sans cursor-pointer outline-none focus:border-[var(--color-accent)]"
                 >
                   {(Object.entries(FONT_MAP) as [FontFamily, { name: string; css: string }][]).map(([key, def]) => (
+                    <option key={key} value={key}>{def.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Font family — UI */}
+              <div>
+                <div className="text-[11px] font-medium text-[var(--color-t2)] mb-2">
+                  <Type size={12} className="inline mr-1" />
+                  UI Font
+                </div>
+                <select
+                  value={uiFontFamily}
+                  onChange={(e) => setUIFontFamily(e.target.value as UIFontFamily)}
+                  className="w-full bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-2 py-1.5 text-[11px] font-sans cursor-pointer outline-none focus:border-[var(--color-accent)]"
+                >
+                  {(Object.entries(UI_FONT_MAP) as [UIFontFamily, { name: string; css: string }][]).map(([key, def]) => (
                     <option key={key} value={key}>{def.name}</option>
                   ))}
                 </select>

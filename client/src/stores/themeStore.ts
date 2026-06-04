@@ -5,6 +5,7 @@ export type Density = "compact" | "normal" | "comfortable";
 export type AccentColor = "purple" | "blue" | "green" | "orange" | "pink" | "teal";
 export type CodeTheme = "dark" | "light";
 export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "cascadia-code";
+export type UIFontFamily = "system" | "inter" | "geist" | "system-sans";
 
 export const FONT_MAP: Record<FontFamily, { name: string; css: string }> = {
   system: { name: "System", css: "JetBrains Mono, Fira Code, monospace" },
@@ -13,6 +14,13 @@ export const FONT_MAP: Record<FontFamily, { name: string; css: string }> = {
   "source-code-pro": { name: "Source Code Pro", css: '"Source Code Pro", monospace' },
   "ibm-plex-mono": { name: "IBM Plex Mono", css: '"IBM Plex Mono", monospace' },
   "cascadia-code": { name: "Cascadia Code", css: '"Cascadia Code", monospace' },
+};
+
+export const UI_FONT_MAP: Record<UIFontFamily, { name: string; css: string }> = {
+  system: { name: "System", css: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+  inter: { name: "Inter", css: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' },
+  geist: { name: "Geist", css: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif' },
+  "system-sans": { name: "System Sans", css: 'system-ui, -apple-system, sans-serif' },
 };
 
 export interface AccentDef {
@@ -37,6 +45,7 @@ interface ThemeState {
   density: Density;
   fontScale: number;
   fontFamily: FontFamily;
+  uiFontFamily: UIFontFamily;
   codeTheme: CodeTheme;
 
   setMode: (mode: ThemeMode) => void;
@@ -44,6 +53,7 @@ interface ThemeState {
   setDensity: (density: Density) => void;
   setFontScale: (scale: number) => void;
   setFontFamily: (font: FontFamily) => void;
+  setUIFontFamily: (font: UIFontFamily) => void;
   setCodeTheme: (theme: CodeTheme) => void;
 
   // Derived
@@ -55,10 +65,10 @@ function loadTheme() {
     const raw = localStorage.getItem("pi-web-theme");
     if (raw) return JSON.parse(raw);
   } catch {}
-  return { mode: "dark" as ThemeMode, accent: "purple" as AccentColor, density: "normal" as Density, fontScale: 1, fontFamily: "system" as FontFamily, codeTheme: "dark" as CodeTheme };
+  return { mode: "dark" as ThemeMode, accent: "purple" as AccentColor, density: "normal" as Density, fontScale: 1, fontFamily: "system" as FontFamily, uiFontFamily: "system" as UIFontFamily, codeTheme: "dark" as CodeTheme };
 }
 
-function persist(s: { mode: ThemeMode; accent: AccentColor; density: Density; fontScale: number; fontFamily: FontFamily; codeTheme: CodeTheme }) {
+function persist(s: { mode: ThemeMode; accent: AccentColor; density: Density; fontScale: number; fontFamily: FontFamily; uiFontFamily: UIFontFamily; codeTheme: CodeTheme }) {
   localStorage.setItem("pi-web-theme", JSON.stringify(s));
 }
 
@@ -66,7 +76,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
   const initial = loadTheme();
 
   // Apply theme to document
-  applyTheme(initial.mode, initial.accent, initial.density, initial.fontScale, initial.fontFamily, initial.codeTheme);
+  applyTheme(initial.mode, initial.accent, initial.density, initial.fontScale, initial.fontFamily, initial.uiFontFamily, initial.codeTheme);
 
   return {
     ...initial,
@@ -82,30 +92,30 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     setMode: (mode) => {
       set({ mode });
       const s = get();
-      applyTheme(mode, s.accent, s.density, s.fontScale, s.fontFamily, s.codeTheme);
-      persist({ mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, codeTheme: s.codeTheme });
+      applyTheme(mode, s.accent, s.density, s.fontScale, s.fontFamily, s.uiFontFamily, s.codeTheme);
+      persist({ mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, uiFontFamily: s.uiFontFamily, codeTheme: s.codeTheme });
     },
 
     setAccent: (accent) => {
       set({ accent });
       const s = get();
-      applyTheme(s.mode, accent, s.density, s.fontScale, s.fontFamily, s.codeTheme);
-      persist({ mode: s.mode, accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, codeTheme: s.codeTheme });
+      applyTheme(s.mode, accent, s.density, s.fontScale, s.fontFamily, s.uiFontFamily, s.codeTheme);
+      persist({ mode: s.mode, accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, uiFontFamily: s.uiFontFamily, codeTheme: s.codeTheme });
     },
 
     setDensity: (density) => {
       set({ density });
       const s = get();
-      applyTheme(s.mode, s.accent, density, s.fontScale, s.fontFamily, s.codeTheme);
+      applyTheme(s.mode, s.accent, density, s.fontScale, s.fontFamily, s.uiFontFamily, s.codeTheme);
       document.documentElement.setAttribute("data-density", density);
-      persist({ mode: s.mode, accent: s.accent, density, fontScale: s.fontScale, fontFamily: s.fontFamily, codeTheme: s.codeTheme });
+      persist({ mode: s.mode, accent: s.accent, density, fontScale: s.fontScale, fontFamily: s.fontFamily, uiFontFamily: s.uiFontFamily, codeTheme: s.codeTheme });
     },
 
     setFontScale: (fontScale) => {
       set({ fontScale });
       const s = get();
       document.documentElement.style.fontSize = `${13 * fontScale}px`;
-      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale, fontFamily: s.fontFamily, codeTheme: s.codeTheme });
+      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale, fontFamily: s.fontFamily, uiFontFamily: s.uiFontFamily, codeTheme: s.codeTheme });
     },
 
     setFontFamily: (fontFamily) => {
@@ -115,19 +125,28 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       document.documentElement.style.setProperty("--font-mono", font.css);
       document.documentElement.setAttribute("data-font-family", fontFamily);
       applyCodeTheme(s.codeTheme);
-      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily, codeTheme: s.codeTheme });
+      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily, uiFontFamily: s.uiFontFamily, codeTheme: s.codeTheme });
+    },
+
+    setUIFontFamily: (uiFontFamily) => {
+      set({ uiFontFamily });
+      const s = get();
+      const font = UI_FONT_MAP[uiFontFamily];
+      document.documentElement.style.setProperty("--font-sans", font.css);
+      applyCodeTheme(s.codeTheme);
+      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, uiFontFamily, codeTheme: s.codeTheme });
     },
 
     setCodeTheme: (codeTheme) => {
       set({ codeTheme });
       const s = get();
       applyCodeTheme(codeTheme);
-      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, codeTheme });
+      persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, uiFontFamily: s.uiFontFamily, codeTheme });
     },
   };
 });
 
-function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, fontScale: number, fontFamily: FontFamily, codeTheme: CodeTheme) {
+function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, fontScale: number, fontFamily: FontFamily, uiFontFamily: UIFontFamily, codeTheme: CodeTheme) {
   const acc = ACCENT_MAP[accent];
   const resolved = mode === "system"
     ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
@@ -137,10 +156,14 @@ function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, font
   document.documentElement.setAttribute("data-density", density);
   document.documentElement.style.fontSize = `${13 * fontScale}px`;
 
-  // Font family
+  // Code font
   const font = FONT_MAP[fontFamily];
   document.documentElement.style.setProperty("--font-mono", font.css);
   document.documentElement.setAttribute("data-font-family", fontFamily);
+
+  // UI font
+  const uiFont = UI_FONT_MAP[uiFontFamily];
+  document.documentElement.style.setProperty("--font-sans", uiFont.css);
 
   // Code theme
   applyCodeTheme(codeTheme);
@@ -164,7 +187,7 @@ if (typeof window !== "undefined") {
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     const state = useThemeStore.getState();
     if (state.mode === "system") {
-      applyTheme("system", state.accent, state.density, state.fontScale, state.fontFamily, state.codeTheme);
+      applyTheme("system", state.accent, state.density, state.fontScale, state.fontFamily, state.uiFontFamily, state.codeTheme);
     }
   });
 }

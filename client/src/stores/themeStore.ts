@@ -110,8 +110,10 @@ function loadTheme() {
     if (raw) {
       const parsed = JSON.parse(raw);
       // Validate font keys exist in maps (stale localStorage after theme updates)
-      if (!FONT_MAP[parsed.fontFamily]) parsed.fontFamily = defaults.fontFamily;
-      if (!UI_FONT_MAP[parsed.uiFontFamily]) parsed.uiFontFamily = defaults.uiFontFamily;
+      const fontFamily = parsed.fontFamily as FontFamily;
+      if (!FONT_MAP[fontFamily]) parsed.fontFamily = defaults.fontFamily;
+      const uiFontFamily = parsed.uiFontFamily as UIFontFamily;
+      if (!UI_FONT_MAP[uiFontFamily]) parsed.uiFontFamily = defaults.uiFontFamily;
       return { ...defaults, ...parsed };
     }
   } catch {}

@@ -51,6 +51,18 @@ export function Composer({ panelIndex, disabled }: Props) {
   // Character count
   const [charCount, setCharCount] = useState(0);
 
+  // Ctrl+K / Cmd+K to focus composer
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        textareaRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const adjustHeight = useCallback(() => {
     const ta = textareaRef.current;
     if (ta) {

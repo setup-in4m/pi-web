@@ -35,6 +35,31 @@ body {
   --radius-sm: calc(3px * var(--font-scale));
   --radius-md: calc(6px * var(--font-scale));
   --radius-lg: calc(10px * var(--font-scale));
+  /* Code block theme vars */
+  --hl-bg: #1e2228;
+  --hl-fg: #abb2bf;
+}
+
+/* ── Odysseus Theme ──────────────────────────────────── */
+[data-theme="odysseus"] {
+  --color-bg: #282c34;
+  --color-bg2: #21252b;
+  --color-bg3: #2c313a;
+  --color-bgh: #353b48;
+  --color-bga: #3e4452;
+  --color-bd: #181a1f;
+  --color-bdl: #3e4452;
+  --color-t1: #abb2bf;
+  --color-t2: #828997;
+  --color-t3: #5c6370;
+  --color-accent: #e06c75;
+  --color-accent-hover: #e89199;
+  --color-accent-glow: rgba(224,108,117,0.3);
+  --color-danger: #e06c75;
+  --color-success: #98c379;
+  --color-warning: #d19a66;
+  --hl-bg: #1e2228;
+  --hl-fg: #abb2bf;
 }
 
 /* Scale Lucide and other SVG icons with font size */
@@ -713,6 +738,64 @@ pre[class*="language-"],
 }
 .sash-container .sash[data-allotment-sash-state] {
   --sash-hover-size: 0px;
+}
+
+/* ── Thinking sections (Odysseus-style collapsible) ─── */
+.thinking-section {
+  margin: 0.5rem 0;
+  border-left: 2px solid var(--color-accent);
+  padding-left: 0.75rem;
+}
+.thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.75em;
+  color: var(--color-t3);
+  user-select: none;
+  padding: 2px 0;
+}
+.thinking-header:hover { color: var(--color-t2); }
+.thinking-time {
+  font-size: 0.85em;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+}
+.thinking-toggle {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.thinking-section:not(.collapsed) .thinking-toggle { transform: rotate(180deg); }
+.thinking-content {
+  overflow: hidden;
+  max-height: 2000px;
+  transition: max-height 0.3s ease;
+}
+.thinking-section.collapsed .thinking-content { max-height: 0; }
+.thinking-content-inner {
+  padding: 0.35rem 0 0;
+  font-size: 0.8em;
+  color: var(--color-t2);
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+/* ── Smart links ────────────────────────────────────── */
+a.chat-link {
+  color: var(--color-accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--color-accent);
+}
+a.chat-link:hover { border-bottom-style: solid; }
+
+/* ── Message bubble minimal style ───────────────────── */
+.msg-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 0.35em;
 }
 
 /* Reduced motion */

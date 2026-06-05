@@ -79,6 +79,9 @@ interface PanelState extends PanelSlice {
   // Regen
   regenLastMessage: (index: number) => Promise<void>;
 
+  // Stop + continue
+  stopStreaming: (index: number) => void;
+
   // Stall detection
 
   // Live thinking (streaming)
@@ -867,6 +870,40 @@ export const usePanelStore = create<PanelState>((set, get) => {
           ),
         }));
       }
+    },
+
+    // ── Stop Streaming (with continue option) ──────────
+
+    stopStreaming: (index) => {
+      const panel = get().panels[index];
+      if (!panel?.streaming) return;
+      const msgs = [...panel.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.role === "assistant" && last.content) {
+        const lastContent = last.content;
+        // Append stopped indicator with Continue button
+        const plain = (() => { const d = document.createElement("div"); d.innerHTML = lastContent; return (d.textContent || "").slice(-500); })();
+        msgs.push({
+          role: "assistant",
+          content: `<div class="stopped-indicator"><span>[Message interrupted]</span><button class="continue-btn" onclick="window._piContinue&amp;&amp;window._piContinue('${escapeHtml(panel.sessionKey || '')}','${escapeHtml(plain).replace(/'/g, "\\'")}')">▶ Continue</button></div>`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      set((s) => ({
+        panels: s.panels.map((p, i) =>
+          i === index ? { ...p, messages: msgs, streaming: false, stallTimer: null, stallNotified: false } : p
+        ),
+      }));
+      // Register global continue handler
+      (window as any)._piContinue = async (key: string, cutoff: string) => {
+        const msg = `Your previous response was interrupted. It ended with:\n\n${cutoff}\n\nDo NOT repeat what you already said. Continue exactly from where you were cut off.`;
+        set((s) => ({
+          panels: s.panels.map((p) => p.sessionKey === key ? { ...p, messages: [...p.messages, { role: "user", content: msg, timestamp: new Date().toISOString() }], streaming: true } : p),
+        }));
+        try { await api.sendMessage(key, msg); } catch (e: any) {
+          useToastStore.getState().addToast(e.message, "error");
+        }
+      };
     },
 
     // ── Stall detection ─────────────────────────────────

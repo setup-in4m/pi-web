@@ -1,11 +1,11 @@
 import { create } from "zustand";
 
-export type ThemeMode = "dark" | "light" | "system" | "solarized-dark" | "solarized-light" | "tokyo-night" | "catppuccin" | "catppuccin-latte" | "nord" | "rose-pine" | "rose-pine-dawn";
+export type ThemeMode = "dark" | "light" | "system" | "solarized-dark" | "solarized-light" | "tokyo-night" | "catppuccin" | "catppuccin-latte" | "nord" | "rose-pine" | "rose-pine-dawn" | "odysseus";
 export type Density = "compact" | "normal" | "comfortable";
 export type AccentColor = "purple" | "blue" | "green" | "orange" | "pink" | "teal" | "red" | "amber" | "cyan";
 export type CodeTheme = "dark" | "light" | "monokai" | "dracula" | "nord" | "github";
 export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "roboto-mono" | "space-mono" | "courier-prime";
-export type UIFontFamily = "system" | "inter" | "nunito" | "roboto" | "open-sans" | "oswald" | "poppins" | "dm-sans" | "system-sans";
+export type UIFontFamily = "system" | "inter" | "nunito" | "roboto" | "open-sans" | "oswald" | "poppins" | "dm-sans" | "system-sans" | "fira-code-ui";
 
 // ── Font loading (Google Fonts CDN) ─────────────────────
 
@@ -24,6 +24,7 @@ const GOOGLE_FONTS: Record<string, string> = {
   oswald: "Oswald:wght@400;500;600;700",
   poppins: "Poppins:wght@400;500;600;700",
   "dm-sans": "DM+Sans:wght@400;500;600;700",
+  "fira-code-ui": "Fira+Code:wght@300;400;500;600;700",
 };
 
 function loadGoogleFont(fontKey: string) {
@@ -61,6 +62,7 @@ export const UI_FONT_MAP: Record<UIFontFamily, { name: string; css: string }> = 
   poppins: { name: "Poppins", css: '"Poppins", system-ui, -apple-system, sans-serif' },
   "dm-sans": { name: "DM Sans", css: '"DM Sans", system-ui, -apple-system, sans-serif' },
   "system-sans": { name: "System Sans", css: 'system-ui, -apple-system, sans-serif' },
+  "fira-code-ui": { name: "Fira Code", css: '"Fira Code", ui-monospace, SFMono-Regular, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace' },
 };
 
 export interface AccentDef {
@@ -104,7 +106,7 @@ interface ThemeState {
 }
 
 function loadTheme() {
-  const defaults = { mode: "dark" as ThemeMode, accent: "purple" as AccentColor, density: "normal" as Density, fontScale: 1, fontFamily: "system" as FontFamily, uiFontFamily: "system" as UIFontFamily, codeTheme: "dark" as CodeTheme };
+  const defaults = { mode: "dark" as ThemeMode, accent: "purple" as AccentColor, density: "normal" as Density, fontScale: 1, fontFamily: "fira-code" as FontFamily, uiFontFamily: "fira-code-ui" as UIFontFamily, codeTheme: "dark" as CodeTheme };
   try {
     const raw = localStorage.getItem("pi-web-theme");
     if (raw) {

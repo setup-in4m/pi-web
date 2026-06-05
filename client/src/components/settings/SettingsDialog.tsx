@@ -266,6 +266,7 @@ export function SettingsDialog({ open, onClose }: Props) {
                     { value: "solarized-light" as ThemeMode, icon: Sun, label: "Solarized Light" },
                     { value: "rose-pine" as ThemeMode, icon: Moon, label: "Rose Pine" },
                     { value: "rose-pine-dawn" as ThemeMode, icon: Sun, label: "Rose Pine Dawn" },
+                    { value: "odysseus" as ThemeMode, icon: Moon, label: "Odysseus" },
                   ]).map((opt) => {
                     const Icon = opt.icon;
                     return (

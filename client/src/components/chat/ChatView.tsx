@@ -27,6 +27,30 @@ export function ChatView({ panel }: Props) {
   const regenLastMessage = usePanelStore((s) => s.regenLastMessage);
   const addToast = useToastStore((s) => s.addToast);
   const [dragOver, setDragOver] = useState(false);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const elapsedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Elapsed time counter during streaming ──────────────
+  useEffect(() => {
+    if (panel.streaming) {
+      setElapsedSec(0);
+      elapsedRef.current = setInterval(() => {
+        setElapsedSec((s) => s + 1);
+      }, 1000);
+    } else {
+      if (elapsedRef.current) {
+        clearInterval(elapsedRef.current);
+        elapsedRef.current = null;
+      }
+      setElapsedSec(0);
+    }
+    return () => {
+      if (elapsedRef.current) {
+        clearInterval(elapsedRef.current);
+        elapsedRef.current = null;
+      }
+    };
+  }, [panel.streaming]);
 
   const virtualizer = useVirtualizer({
     count: panel.messages.length,
@@ -344,7 +368,13 @@ export function ChatView({ panel }: Props) {
                       </div>
                     </div>
                   ) : (
-                    <MessageBubble message={msg} streaming={isStreaming} />
+                    <MessageBubble
+                      message={msg}
+                      streaming={isStreaming}
+                      modelDotName={panel.model?.modelId || panel.sessionKey?.split("::")[1]?.slice(0, 12)}
+                      showRegen={isLastAssistant}
+                      onRegen={isLastAssistant ? handleRegenLast : undefined}
+                    />
                   )}
 
                   {!isEditing && !panel.streaming && (
@@ -470,6 +500,55 @@ export function ChatView({ panel }: Props) {
           </div>
         )}
       </div>
+
+      {/* ── Stall banner ──────────────────────────────────── */}
+      {panel.streaming && elapsedSec > 45 && (
+        <div className="absolute bottom-10 left-3 right-3 z-20 bg-[var(--color-bg2)] border border-[var(--color-warning)]/40 rounded-lg px-3 py-2 shadow-lg animate-[fadeIn_0.2s_ease]">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-[var(--color-warning)]">
+              ⏳ Still working? No response in {elapsedSec}s.
+            </span>
+            <button
+              onClick={() => setElapsedSec(0)}
+              className="ml-auto text-[9px] text-[var(--color-t3)] hover:text-[var(--color-t2)] px-2 py-0.5 rounded border border-[var(--color-bd)] transition-colors"
+            >
+              Wait
+            </button>
+            <button
+              onClick={() => {
+                // Stop: abort the stream
+                const panelIdx = panels.indexOf(panel);
+                if (panelIdx >= 0) {
+                  // Trigger a stop by sending an empty message or using a stop action
+                  // For now: just reset streaming state
+                  usePanelStore.setState((s) => ({
+                    panels: s.panels.map((p, i) =>
+                      i === panelIdx ? { ...p, streaming: false } : p
+                    ),
+                  }));
+                }
+              }}
+              className="text-[9px] text-[var(--color-danger)] hover:text-white hover:bg-[var(--color-danger)] px-2 py-0.5 rounded border border-[var(--color-danger)]/40 transition-colors"
+            >
+              Stop
+            </button>
+          </div>
+          {/* Elapsed time bar */}
+          <div className="mt-1.5 h-[2px] bg-[var(--color-bg)] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[var(--color-warning)]/60 rounded-full transition-all duration-1000"
+              style={{ width: `${Math.min((elapsedSec / 60) * 100, 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Streaming elapsed indicator ──────────────────── */}
+      {panel.streaming && elapsedSec > 5 && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-2 py-0.5 rounded-full bg-[var(--color-bg2)]/90 border border-[var(--color-bd)] text-[9px] text-[var(--color-t3)] shadow-sm backdrop-blur-sm animate-[fadeIn_0.3s_ease]">
+          Generating… {elapsedSec}s
+        </div>
+      )}
 
       {showScrollBtn && (
         <button

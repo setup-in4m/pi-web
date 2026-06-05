@@ -167,6 +167,201 @@ svg.lucide,
   --color-t3: #9893a5;
 }
 
+/* ── Odysseus theme ────────────────────────────────── */
+[data-theme="odysseus"] {
+  --color-bg: #282c34;
+  --color-bg2: #21252b;
+  --color-bg3: #2c313a;
+  --color-bgh: #353b48;
+  --color-bga: #3e4452;
+  --color-bd: #181a1f;
+  --color-bdl: #3e4452;
+  --color-t1: #abb2bf;
+  --color-t2: #828997;
+  --color-t3: #5c6370;
+  --color-accent: #e06c75;
+  --color-accent-hover: #e89199;
+  --color-accent-glow: rgba(224,108,117,0.3);
+  --color-danger: #e06c75;
+  --color-success: #98c379;
+  --color-warning: #d19a66;
+}
+
+/* ── Code blocks (Odysseus-style) ─────────────────── */
+.code-block {
+  position: relative;
+  margin: 0.5rem 0;
+  border: 1px solid var(--color-bdl);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.code-block pre {
+  margin: 0;
+  padding: 1rem;
+  padding-right: 3rem;
+  overflow-x: auto;
+  background: var(--hl-bg, #1e2228);
+  color: var(--hl-fg, #abb2bf);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.code-block pre[data-lang]::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--color-t3);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.code-block code {
+  font-family: var(--font-mono);
+  font-size: inherit;
+}
+.code-block-toolbar {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+.code-block:hover .code-block-toolbar,
+.code-block:focus-within .code-block-toolbar {
+  opacity: 1;
+}
+.run-code-btn,
+.edit-code-btn,
+.copy-code-btn {
+  background: var(--color-bg2);
+  border: 1px solid var(--color-bdl);
+  color: var(--color-t2);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.1s, background 0.1s;
+  font-size: 11px;
+}
+.run-code-btn:hover,
+.edit-code-btn:hover,
+.copy-code-btn:hover {
+  color: var(--color-t1);
+  background: var(--color-bg3);
+}
+
+/* ── Thinking sections (Odysseus-style) ────────────── */
+.thinking-section {
+  margin: 0.5rem 0;
+  border-left: 2px solid var(--color-accent);
+  padding-left: 0.75rem;
+}
+.thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.75em;
+  color: var(--color-t3);
+  user-select: none;
+  padding: 2px 0;
+}
+.thinking-header:hover {
+  color: var(--color-t2);
+}
+.thinking-time {
+  font-size: 0.85em;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+}
+.thinking-toggle {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.thinking-section:not(.collapsed) .thinking-toggle {
+  transform: rotate(180deg);
+}
+.thinking-content {
+  overflow: hidden;
+  max-height: 2000px;
+  transition: max-height 0.3s ease;
+}
+.thinking-section.collapsed .thinking-content {
+  max-height: 0;
+}
+.thinking-content-inner {
+  padding: 0.35rem 0 0;
+  font-size: 0.8em;
+  color: var(--color-t2);
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+/* ── Smart link styles ─────────────────────────────── */
+.chat-link {
+  color: var(--color-accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--color-accent);
+}
+.chat-link:hover {
+  border-bottom-style: solid;
+}
+a.bare-url {
+  color: var(--color-accent);
+  word-break: break-all;
+}
+
+/* ── Streaming + misc ──────────────────────────────── */
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.streaming-cursor {
+  animation: blink-cursor 1s step-end infinite;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+.stall-banner {
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.7em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.stopped-indicator {
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--color-warning);
+  font-size: 0.7em;
+  color: var(--color-t3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.continue-btn {
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+.continue-btn:hover {
+  background: var(--color-accent-hover);
+}
+
 /* Light code theme overrides */
 [data-code-theme="light"] .code-block-wrapper pre {
   background: #f6f8fa !important;

@@ -38,6 +38,14 @@ hljs.registerLanguage("markdown", markdown);
 hljs.registerLanguage("md", markdown);
 hljs.registerLanguage("diff", diff);
 
+// Languages that can be run (executed via server)
+const RUNNABLE_LANGS = new Set(["python", "py", "javascript", "js", "typescript", "ts", "bash", "sh", "shell", "zsh"]);
+
+function isRunnable(lang?: string): boolean {
+  if (!lang) return false;
+  return RUNNABLE_LANGS.has(lang.toLowerCase());
+}
+
 // Override marked's renderer for custom code blocks, tables, etc.
 marked.use({
   renderer: {
@@ -61,20 +69,22 @@ marked.use({
         }
       }
 
-      const langLabel = detectedLang
-        ? `<span class="text-[9px] text-[var(--color-t3)] uppercase">${escapeHtml(detectedLang)}</span>`
-        : "";
-
       const escapedCode = escapeHtml(text).replace(/"/g, "&quot;");
 
-      return `<div class="code-block-wrapper relative group my-1.5">
-        <div class="flex items-center justify-between px-2 py-0.5 bg-[#161b22] border border-b-0 border-[var(--color-bdl)] rounded-t text-[10px]">
-          ${langLabel}
-          <button class="copy-btn text-[9px] text-[var(--color-t3)] hover:text-[var(--color-t1)] transition-colors" data-code="${escapedCode}">
-            Copy
+      const runBtn = isRunnable(detectedLang || lang)
+        ? `<button class="run-code-btn" data-code="${escapedCode}" data-lang="${escapeHtml(detectedLang || lang || '')}" title="Run" aria-label="Run code">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>`
+        : "";
+
+      return `<div class="code-block group">
+        <pre><code class="${detectedLang || lang ? 'language-' + escapeHtml(detectedLang || lang || '') : ''}">${highlighted}</code></pre>
+        <div class="code-block-toolbar">
+          ${runBtn}
+          <button class="copy-code-btn" data-code="${escapedCode}" title="Copy" aria-label="Copy code">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           </button>
         </div>
-        <pre class="bg-[#0d1117] p-2 rounded-b border border-[var(--color-bdl)] overflow-x-auto text-[11px] leading-relaxed m-0 font-mono"><code>${highlighted}</code></pre>
       </div>`;
     },
 
@@ -151,6 +161,164 @@ marked.use({
 });
 
 marked.setOptions({ breaks: true, gfm: true });
+
+// ── Thinking block detection (Odysseus-style) ─────────
+
+const THINKING_TAGS = [
+  /<think(?:ing)?(?:\s+[^>]*)?>([\s\S]*?)<\/think(?:ing)?>/gi,
+  /<thought(?:\s+[^>]*)?>([\s\S]*?)<\/thought>/gi,
+  /<\|channel>thought\s*\n?([\s\S]*?)<channel\|>/gi,
+];
+
+const REASONING_PREFIXES = [
+  /^thinking(?:\s+process)?\s*:/i,
+  /^i need /i, /^i should /i, /^i will /i, /^i can /i, /^i want /i,
+  /^let me /i, /^first[,\s]/i, /^the user /i, /^the question /i,
+];
+
+/** Check if text has an unclosed think tag */
+export function hasUnclosedThinkTag(text: string): boolean {
+  const openCount = (text.match(/<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>/gi) || []).length +
+    (text.match(/<\|channel>thought/gi) || []).length;
+  const closeCount = (text.match(/<\/(?:think(?:ing)?|thought)>/gi) || []).length +
+    (text.match(/<channel\|>/gi) || []).length;
+  return openCount > closeCount;
+}
+
+/** Auto-detect reasoning in plain text (no tags) based on common prefixes */
+function detectPlainThink(text: string): string | null {
+  const trimmed = text.trim();
+  for (const rx of REASONING_PREFIXES) {
+    if (rx.test(trimmed)) {
+      // Find a natural boundary — first paragraph break or transition to reply
+      const doubleBreak = trimmed.indexOf('\n\n');
+      if (doubleBreak > 30) {
+        return trimmed.slice(0, doubleBreak).trim();
+      }
+      // Look for common reply starters
+      const replyRx = /\n\n(Hey|Hi[ !]|Hello|Sure|Yes|No[ ,]|Here|Absolutely|Of course|Great|Alright|Thanks|Welcome|Good |I'm|I'd|What|Let|This |As )/i;
+      const replyMatch = replyRx.exec(trimmed);
+      if (replyMatch && replyMatch.index > 60) {
+        return trimmed.slice(0, replyMatch.index).trim();
+      }
+      // Long single paragraph → first 500 chars are likely thinking
+      if (trimmed.length > 500 && !trimmed.includes('\n\n')) {
+        const lines = trimmed.split('\n');
+        if (lines.length > 3) {
+          return lines.slice(0, Math.ceil(lines.length / 2)).join('\n').trim();
+        }
+      }
+      break;
+    }
+  }
+  return null;
+}
+
+/** Extract thinking blocks from text, returning { thinkingBlocks, content, thinkingTime } */
+export function extractThinkingBlocks(text: string): {
+  thinkingBlocks: string[];
+  content: string;
+  thinkingTime: number | null;
+} {
+  let normalized = text;
+  const thinkingTime = null; // Server may provide in future
+  const thinkingBlocks: string[] = [];
+
+  // Try each think tag format
+  for (const rx of THINKING_TAGS) {
+    let match;
+    while ((match = rx.exec(normalized)) !== null) {
+      const content = match[1].trim();
+      if (content) thinkingBlocks.push(content);
+    }
+    normalized = normalized.replace(rx, '');
+  }
+
+  // Handle unclosed think tag — strip from opener to end
+  if (hasUnclosedThinkTag(normalized)) {
+    const strayOpener = normalized.match(/^\s*<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>([\s\S]*)$/i);
+    if (strayOpener) {
+      normalized = strayOpener[1];
+    } else {
+      normalized = normalized.replace(/<(?:think(?:ing)?|thought)(?:\s+[^>]*)?>[\s\S]*$/gi, '');
+    }
+  }
+
+  // Handle orphaned closing tag — text before it is thinking
+  const orphanMatch = normalized.match(/^([\s\S]+?)<\/(?:think(?:ing)?|thought)>/i);
+  if (orphanMatch && orphanMatch[1].trim()) {
+    thinkingBlocks.push(orphanMatch[1].trim());
+    normalized = normalized.slice(orphanMatch[0].length);
+  }
+
+  // Strip remaining orphaned closing tags
+  normalized = normalized.replace(/<\/(?:think(?:ing)?|thought)>/gi, '');
+
+  // Auto-detect plain-text reasoning if no tag-based thinking found
+  if (thinkingBlocks.length === 0) {
+    const plain = detectPlainThink(normalized);
+    if (plain) {
+      thinkingBlocks.push(plain);
+      normalized = normalized.slice(plain.length).trim();
+      // Remove leading double break if present
+      normalized = normalized.replace(/^\n+/, '');
+    }
+  }
+
+  return {
+    thinkingBlocks: thinkingBlocks.length > 1 ? [thinkingBlocks.join('\n\n')] : thinkingBlocks,
+    content: normalized.trim(),
+    thinkingTime,
+  };
+}
+
+/** Build Odysseus-style collapsible thinking section HTML */
+export function renderThinkingSection(thinkContent: string, index: number = 0, thinkTime?: number): string {
+  const id = `think-${Date.now()}-${index}`;
+  const timeHtml = thinkTime != null
+    ? `<span class="thinking-time">${thinkTime}s</span>`
+    : '';
+  return `<div class="thinking-section" id="${id}">
+    <div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">
+      <span>View thinking process</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        ${timeHtml}
+        <span class="thinking-toggle">▾</span>
+      </div>
+    </div>
+    <div class="thinking-content">
+      <div class="thinking-content-inner">${renderMarkdown(thinkContent)}</div>
+    </div>
+  </div>`;
+}
+
+// ── Bare URL autolinking ────────────────────────────
+
+const BARE_URL_RE = /(^|[\s(<])(https?:\/\/[^\s<>"'`\]]+[^\s<>"'`\].,;:!?])/g;
+const SCHEMELESS_DOMAIN_RE = /(^|[\s(<])((?:www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)*\.(?:com|org|net|io|ai|co|dev|app|gov|edu|news|info|tech|xyz|me)(?=$|[\/\s<>"'`\]).,;:!?])(?:\/[^\s<>"'`\])]*)?)/gi;
+/** Auto-link bare URLs and scheme-less domains in text */
+export function autolinkBareUrls(text: string): string {
+  let result = text;
+  // Bare http/https URLs
+  result = result.replace(BARE_URL_RE, (_, prefix, url) =>
+    `${prefix}<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="bare-url">${url}</a>`
+  );
+  // Scheme-less domains (only if not inside an existing <a> tag)
+  // This is a best-effort approach — proper HTML parsing would need a DOM
+  result = result.replace(SCHEMELESS_DOMAIN_RE, (match, prefix, domain) => {
+    // Skip if already inside an <a> or <img> tag context
+    const before = result.slice(0, result.indexOf(match));
+    if (before.lastIndexOf('<a ') > before.lastIndexOf('</a>')) return match;
+    const trail = (domain.match(/[.,;:!?)]+$/) || [''])[0];
+    const core = trail ? domain.slice(0, -trail.length) : domain;
+    return `${prefix}<a href="https://${core}" target="_blank" rel="noopener noreferrer" class="bare-url">${core}</a>${trail}`;
+  });
+  // Entity anchors: [#session-abc123] → clickable anchor link
+  result = result.replace(/\[#(session|document|note|image|email|event|task|skill|research)-([A-Za-z0-9_-]+)\]/g,
+    (_, kind, id) => `<a href="#${kind}-${id}" class="chat-link">#${kind}-${id}</a>`
+  );
+  return result;
+}
 
 // ── LRU Cache for memoized markdown rendering ────────────
 
@@ -243,6 +411,8 @@ export function renderMarkdown(text: string): string {
   // Pre-process: strip leaked tool syntax, squash unclosed code fences
   let processed = toolSyntaxStrip(text);
   processed = squashOutsideCode(processed);
+  // Auto-link bare URLs and scheme-less domains
+  processed = autolinkBareUrls(processed);
 
   // Pre-process math: $$...$$ (display) and $...$ (inline)
   try {

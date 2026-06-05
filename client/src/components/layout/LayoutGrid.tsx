@@ -44,7 +44,7 @@ export function LayoutGrid() {
   };
 
   const renderSingle = () => (
-    <div className="flex-1 bg-[var(--color-bg)] overflow-hidden min-h-0 h-full">
+    <div className="flex-1 bg-[var(--color-bg)] overflow-hidden min-h-0 h-full outline-2 outline-[var(--color-accent)] outline-offset-[-2px]">
       <ErrorBoundary>
         <Panel panel={panels[activeIndex] || panels[0]} isActive={true} panelIndex={activeIndex} />
       </ErrorBoundary>

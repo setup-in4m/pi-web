@@ -4,8 +4,8 @@ export type ThemeMode = "dark" | "light" | "system" | "solarized-dark" | "solari
 export type Density = "compact" | "normal" | "comfortable";
 export type AccentColor = "purple" | "blue" | "green" | "orange" | "pink" | "teal" | "red" | "amber" | "cyan";
 export type CodeTheme = "dark" | "light" | "monokai" | "dracula" | "nord" | "github";
-export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "roboto-mono";
-export type UIFontFamily = "system" | "inter" | "nunito" | "roboto" | "open-sans" | "lato" | "poppins" | "dm-sans" | "system-sans";
+export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "roboto-mono" | "space-mono" | "courier-prime";
+export type UIFontFamily = "system" | "inter" | "nunito" | "roboto" | "open-sans" | "oswald" | "poppins" | "dm-sans" | "system-sans";
 
 // ── Font loading (Google Fonts CDN) ─────────────────────
 
@@ -15,11 +15,13 @@ const GOOGLE_FONTS: Record<string, string> = {
   "source-code-pro": "Source+Code+Pro:wght@400;500;600;700",
   "ibm-plex-mono": "IBM+Plex+Mono:wght@400;500;600;700",
   "roboto-mono": "Roboto+Mono:wght@400;500;600;700",
+  "space-mono": "Space+Mono:wght@400;700",
+  "courier-prime": "Courier+Prime:wght@400;700",
   inter: "Inter:wght@400;500;600;700",
   nunito: "Nunito:wght@400;500;600;700",
   roboto: "Roboto:wght@400;500;700",
   "open-sans": "Open+Sans:wght@400;500;600;700",
-  lato: "Lato:wght@400;700",
+  oswald: "Oswald:wght@400;500;600;700",
   poppins: "Poppins:wght@400;500;600;700",
   "dm-sans": "DM+Sans:wght@400;500;600;700",
 };
@@ -45,6 +47,8 @@ export const FONT_MAP: Record<FontFamily, { name: string; css: string }> = {
   "source-code-pro": { name: "Source Code Pro", css: '"Source Code Pro", ui-monospace, monospace' },
   "ibm-plex-mono": { name: "IBM Plex Mono", css: '"IBM Plex Mono", ui-monospace, monospace' },
   "roboto-mono": { name: "Roboto Mono", css: '"Roboto Mono", ui-monospace, monospace' },
+  "space-mono": { name: "Space Mono", css: '"Space Mono", ui-monospace, monospace' },
+  "courier-prime": { name: "Courier Prime", css: '"Courier Prime", ui-monospace, monospace' },
 };
 
 export const UI_FONT_MAP: Record<UIFontFamily, { name: string; css: string }> = {
@@ -53,7 +57,7 @@ export const UI_FONT_MAP: Record<UIFontFamily, { name: string; css: string }> = 
   nunito: { name: "Nunito", css: '"Nunito", system-ui, -apple-system, sans-serif' },
   roboto: { name: "Roboto", css: '"Roboto", system-ui, -apple-system, sans-serif' },
   "open-sans": { name: "Open Sans", css: '"Open Sans", system-ui, -apple-system, sans-serif' },
-  lato: { name: "Lato", css: '"Lato", system-ui, -apple-system, sans-serif' },
+  oswald: { name: "Oswald", css: '"Oswald", system-ui, -apple-system, sans-serif' },
   poppins: { name: "Poppins", css: '"Poppins", system-ui, -apple-system, sans-serif' },
   "dm-sans": { name: "DM Sans", css: '"DM Sans", system-ui, -apple-system, sans-serif' },
   "system-sans": { name: "System Sans", css: 'system-ui, -apple-system, sans-serif' },

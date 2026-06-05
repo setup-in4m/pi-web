@@ -434,21 +434,27 @@ pre[class*="language-"],
   transform: translateX(-50%);
   background: var(--color-bdl);
   border-radius: 1px;
-  transition: background 0.15s, width 0.15s;
   pointer-events: none;
 }
 .sash-container .sash:hover {
   background: color-mix(in srgb, var(--color-accent) 40%, transparent) !important;
 }
-.sash-container .sash.active::before {
+
+/* Active panel: color the whole sash center line accent */
+.split-view-view:has([data-panel-active]) + .sash-container .sash::before,
+.sash-container:has(+ .split-view-view:has([data-panel-active])) .sash::before {
   background: var(--color-accent);
-  width: 3px;
 }
-/* Kill Allotment's built-in blue hover line */
-.sash-container .sash:hover::after {
+
+/* Kill Allotment's built-in hover line + delayed animations */
+.sash-container .sash:hover::after,
+.sash-container .sash:hover::before {
+  transition: none !important;
+}
+.sash-container .sash::after {
   display: none !important;
 }
-.sash-container .sash[data-allotment-sash-state="hover"] {
+.sash-container .sash[data-allotment-sash-state] {
   --sash-hover-size: 0px;
 }
 

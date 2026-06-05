@@ -69,11 +69,18 @@ interface ThemeState {
 }
 
 function loadTheme() {
+  const defaults = { mode: "dark" as ThemeMode, accent: "purple" as AccentColor, density: "normal" as Density, fontScale: 1, fontFamily: "system" as FontFamily, uiFontFamily: "system" as UIFontFamily, codeTheme: "dark" as CodeTheme };
   try {
     const raw = localStorage.getItem("pi-web-theme");
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Validate font keys exist in maps (stale localStorage after theme updates)
+      if (!FONT_MAP[parsed.fontFamily]) parsed.fontFamily = defaults.fontFamily;
+      if (!UI_FONT_MAP[parsed.uiFontFamily]) parsed.uiFontFamily = defaults.uiFontFamily;
+      return { ...defaults, ...parsed };
+    }
   } catch {}
-  return { mode: "dark" as ThemeMode, accent: "purple" as AccentColor, density: "normal" as Density, fontScale: 1, fontFamily: "system" as FontFamily, uiFontFamily: "system" as UIFontFamily, codeTheme: "dark" as CodeTheme };
+  return defaults;
 }
 
 function persist(s: { mode: ThemeMode; accent: AccentColor; density: Density; fontScale: number; fontFamily: FontFamily; uiFontFamily: UIFontFamily; codeTheme: CodeTheme }) {
@@ -166,12 +173,12 @@ function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, font
   document.documentElement.style.fontSize = `${13 * fontScale}px`;
 
   // Code font
-  const font = FONT_MAP[fontFamily];
+  const font = FONT_MAP[fontFamily] ?? FONT_MAP.system;
   document.documentElement.style.setProperty("--font-mono", font.css);
-  document.documentElement.setAttribute("data-font-family", fontFamily);
+  document.documentElement.setAttribute("data-font-family", fontFamily in FONT_MAP ? fontFamily : "system");
 
   // UI font
-  const uiFont = UI_FONT_MAP[uiFontFamily];
+  const uiFont = UI_FONT_MAP[uiFontFamily] ?? UI_FONT_MAP.system;
   document.documentElement.style.setProperty("--font-sans", uiFont.css);
 
   // Code theme

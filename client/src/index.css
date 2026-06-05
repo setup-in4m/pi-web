@@ -434,7 +434,7 @@ pre[class*="language-"],
   left: 50%;
   width: 2px !important;
   transform: translateX(-50%);
-  background: var(--color-bdl);
+  background: var(--color-bdl) !important;
   border-radius: 1px;
   pointer-events: none;
 }
@@ -444,12 +444,11 @@ pre[class*="language-"],
 
 /* Active panel: color sashes at this split level accent */
 .split-view:has([data-panel-active]) > .sash-container .sash::before {
-  background: var(--color-accent);
+  background: var(--color-accent) !important;
 }
 
 /* Kill Allotment's built-in hover line + delayed animations */
-.sash-container .sash:hover::after,
-.sash-container .sash:hover::before {
+.sash-container .sash::before {
   transition: none !important;
 }
 .sash-container .sash::after {

@@ -411,6 +411,9 @@ pre[class*="language-"],
 /* Allotment splitter theming */
 .split-view-container {
   background: var(--color-bg) !important;
+  --separator-border: transparent;
+  --focus-border: var(--color-accent);
+  --sash-hover-size: 0px;
 }
 .split-view-view {
   background: var(--color-bg) !important;
@@ -435,12 +438,18 @@ pre[class*="language-"],
   pointer-events: none;
 }
 .sash-container .sash:hover {
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent) !important;
+  background: color-mix(in srgb, var(--color-accent) 40%, transparent) !important;
 }
-.sash-container .sash:hover::before,
 .sash-container .sash.active::before {
   background: var(--color-accent);
   width: 3px;
+}
+/* Kill Allotment's built-in blue hover line */
+.sash-container .sash:hover::after {
+  display: none !important;
+}
+.sash-container .sash[data-allotment-sash-state="hover"] {
+  --sash-hover-size: 0px;
 }
 
 /* Active panel border — applied to the Allotment pane itself so it renders above the sash */
@@ -448,12 +457,6 @@ pre[class*="language-"],
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
   z-index: 1;
-}
-
-/* Override Allotment's built-in separator border and focus colors */
-:root {
-  --separator-border: var(--color-bd);
-  --focus-border: var(--color-accent);
 }
 
 /* Reduced motion */

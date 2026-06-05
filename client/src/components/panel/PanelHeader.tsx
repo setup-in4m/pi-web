@@ -43,7 +43,7 @@ export function PanelHeader({ panel, panelIndex }: Props) {
 
   return (
     <div className="flex items-center gap-2 px-2.5 py-0.5 bg-[var(--color-bg2)] border-b border-[var(--color-bd)] text-[10px] text-[var(--color-t3)] flex-shrink-0 min-h-[22px] overflow-hidden">
-      <span className="text-[var(--color-accent)]">◆</span>
+      <span className="w-[6px] h-[6px] rounded-full bg-[var(--color-accent)] flex-shrink-0" />
       {editingTitle ? (
         <input
           ref={titleInputRef}
@@ -194,7 +194,7 @@ export function PanelHeader({ panel, panelIndex }: Props) {
                 className="bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-1 py-0 text-[9px] font-sans cursor-pointer outline-none focus:border-[var(--color-accent)]"
                 title="Thinking level"
               >
-                <option value="off">🧠 off</option>
+                <option value="off">think: off</option>
                 <option value="low">low</option>
                 <option value="medium">med</option>
                 <option value="high">high</option>

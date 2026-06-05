@@ -317,6 +317,25 @@ a.bare-url {
   word-break: break-all;
 }
 
+/* ── Message bubbles (Odysseus-style minimal) ───────── */
+.msg {
+  margin-bottom: 0.75rem;
+  padding: 0.25rem 0;
+}
+.msg .role-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.msg .group-hover\/msg\:opacity-100 {
+  opacity: 0;
+}
+.msg:hover .group-hover\/msg\:opacity-100 {
+  opacity: 1;
+}
+
 /* ── Streaming + misc ──────────────────────────────── */
 @keyframes blink-cursor {
   0%, 100% { opacity: 1; }

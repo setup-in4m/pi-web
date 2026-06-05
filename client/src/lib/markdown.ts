@@ -383,6 +383,43 @@ export function squashOutsideCode(text: string): string {
   return result;
 }
 
+// ── Thinking section HTML builder ───────────────────────
+
+/** Build an Odysseus-style collapsible thinking section (rendered markdown content) */
+export function createThinkingSection(thinkingContent: string, thinkingTime?: string | null): string {
+  const rendered = renderMarkdown(thinkingContent);
+  const timeHtml = thinkingTime
+    ? `<span class="thinking-time">${escapeHtml(thinkingTime)}s</span>`
+    : "";
+  return `<div class="thinking-section">
+  <div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">
+    <span>View thinking process</span>
+    ${timeHtml}
+    <span class="thinking-toggle">▾</span>
+  </div>
+  <div class="thinking-content">
+    <div class="thinking-content-inner">${rendered}</div>
+  </div>
+</div>`;
+}
+
+/** Build thinking section with pre-escaped raw text (no markdown) */
+export function createThinkingSectionRaw(thinkingContent: string, thinkingTime?: string | null): string {
+  const timeHtml = thinkingTime
+    ? `<span class="thinking-time">${escapeHtml(thinkingTime)}s</span>`
+    : "";
+  return `<div class="thinking-section">
+  <div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">
+    <span>View thinking process</span>
+    ${timeHtml}
+    <span class="thinking-toggle">▾</span>
+  </div>
+  <div class="thinking-content">
+    <div class="thinking-content-inner">${escapeHtml(thinkingContent)}</div>
+  </div>
+</div>`;
+}
+
 export function renderMarkdown(text: string): string {
   // Check cache
   const cached = cache.get(text);

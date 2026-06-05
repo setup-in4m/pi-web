@@ -3,7 +3,8 @@ import type { MessageRecord, UsageInfo } from "../lib/api";
 import * as api from "../lib/api";
 import { subscribe as wsSubscribe, onReconnect } from "../lib/ws";
 import { useToastStore } from "./toastStore";
-import { renderToolStart, renderToolEnd, escapeHtml } from "../lib/tools";
+import { renderToolStart, renderToolEnd } from "../lib/tools";
+import { createThinkingSectionRaw, escapeHtml } from "../lib/markdown";
 
 export interface PanelData {
   id: number;
@@ -517,7 +518,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
           if (p.sessionKey !== key) return p;
           const thinkingMsg: MessageRecord = {
             role: "assistant",
-            content: `<details class="thinking-block my-1" open><summary class="text-[10px] text-[var(--color-t3)] cursor-pointer hover:text-[var(--color-t2)] select-none">💭 Thinking</summary><div class="mt-1 px-2 py-1.5 rounded border border-[var(--color-bd)] bg-[var(--color-bg2)] text-[11px] text-[var(--color-t2)] italic whitespace-pre-wrap">${escapeHtml(p.thinkingContent)}</div></details>`,
+            content: createThinkingSectionRaw(p.thinkingContent),
             timestamp: new Date().toISOString(),
           };
           return { ...p, messages: [...p.messages, thinkingMsg], thinkingContent: "" };
@@ -957,21 +958,18 @@ export const usePanelStore = create<PanelState>((set, get) => {
 
 function renderLiveThinking({ content, streaming }: { content: string; streaming: boolean }): string {
   if (streaming) {
-    return `<details class="thinking-block my-1" open data-live-thinking="true">
-      <summary class="text-[10px] text-[var(--color-t3)] cursor-pointer hover:text-[var(--color-t2)] select-none flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse"></span>
-        💭 Thinking…
-      </summary>
-      <div class="mt-1 px-2 py-1.5 rounded border border-[var(--color-bd)] bg-[var(--color-bg2)] text-[11px] text-[var(--color-t2)] leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}<span class="streaming-cursor">▊</span></div>
-    </details>`;
+    return `<div class="thinking-section" data-live-thinking="true">
+  <div class="thinking-header" style="cursor:default">
+    <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
+    <span>Thinking…</span>
+    <span class="thinking-toggle" style="transform:none">▾</span>
+  </div>
+  <div class="thinking-content">
+    <div class="thinking-content-inner">${escapeHtml(content)}<span class="streaming-cursor">▊</span></div>
+  </div>
+</div>`;
   }
-  // Static (closed after message_start)
-  return `<details class="thinking-block my-1" data-live-thinking="false">
-    <summary class="text-[10px] text-[var(--color-t3)] cursor-pointer hover:text-[var(--color-t2)] select-none">
-      💭 Thinking
-    </summary>
-    <div class="mt-1 px-2 py-1.5 rounded border border-[var(--color-bd)] bg-[var(--color-bg2)] text-[11px] text-[var(--color-t2)] italic whitespace-pre-wrap">${escapeHtml(content)}</div>
-  </details>`;
+  return createThinkingSectionRaw(content);
 }
 
 function renderSubAgentStart(id: string, task: string): string {

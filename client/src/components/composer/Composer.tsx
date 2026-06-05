@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, useEffect, useMemo } from "react";
-import { Send, Command, Zap, Trash2, List, HelpCircle, AtSign } from "lucide-react";
+import { Send, Command, Zap, Trash2, List, HelpCircle, AtSign, Palette, FileType, Download } from "lucide-react";
 import { usePanelStore } from "../../stores/panelStore";
 import { useModelStore } from "../../stores/modelStore";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -23,6 +23,9 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { id: "/compact", description: "Compact session context to save tokens", icon: <Zap size={13} /> },
   { id: "/clear", description: "Clear current chat messages", icon: <Trash2 size={13} /> },
   { id: "/models", description: "List available models", icon: <List size={13} /> },
+  { id: "/theme", description: "List available UI themes", icon: <Palette size={13} /> },
+  { id: "/font", description: "List available font families", icon: <FileType size={13} /> },
+  { id: "/export", description: "Export this session as Markdown", icon: <Download size={13} /> },
   { id: "/help", description: "Show available commands and tips", icon: <HelpCircle size={13} /> },
 ];
 
@@ -182,6 +185,58 @@ export function Composer({ panelIndex, disabled }: Props) {
           ta.value = "";
           adjustHeight();
           addToast(`${models.length} models listed`, "success");
+          return;
+        }
+        case "/theme": {
+          const { useThemeStore } = await import("../../stores/themeStore");
+          // List available theme modes
+          const themes = ["dark", "light", "system", "solarized-dark", "solarized-light", "tokyo-night", "catppuccin", "nord", "rose-pine", "odysseus"];
+          const current = useThemeStore.getState().mode;
+          const themeList = themes.map(t => `- ${t}${t === current ? ' *(current)*' : ''}`).join('\n');
+          usePanelStore.setState((s) => ({
+            panels: s.panels.map((p, i) =>
+              i === panelIndex ? {
+                ...p,
+                messages: [...p.messages, {
+                  role: "assistant" as const,
+                  content: `<div class="text-[11px] text-[var(--color-t2)]"><span class="text-[var(--color-t3)] text-[9px]">🎨 Available themes</span><div class="mt-1">${themeList}</div><div class="mt-1.5 text-[10px] text-[var(--color-t3)]">Change in Settings → Appearance, or use <code>/font</code> to pick fonts</div></div>`,
+                  timestamp: new Date().toISOString(),
+                }],
+              } : p
+            ),
+          }));
+          ta.value = "";
+          adjustHeight();
+          addToast("Theme list shown", "success");
+          return;
+        }
+        case "/font": {
+          const { FONT_MAP } = await import("../../stores/themeStore");
+          const current = (await import("../../stores/themeStore")).useThemeStore.getState().fontFamily;
+          const fontList = Object.entries(FONT_MAP).map(([k, v]) => `- **${k}** — ${v.name}${k === current ? ' *(current)*' : ''}`).join('\n');
+          usePanelStore.setState((s) => ({
+            panels: s.panels.map((p, i) =>
+              i === panelIndex ? {
+                ...p,
+                messages: [...p.messages, {
+                  role: "assistant" as const,
+                  content: `<div class="text-[11px] text-[var(--color-t2)]"><span class="text-[var(--color-t3)] text-[9px]">🔤 Available code fonts</span><div class="mt-1">${fontList}</div><div class="mt-1.5 text-[10px] text-[var(--color-t3)]">Change in Settings → Appearance</div></div>`,
+                  timestamp: new Date().toISOString(),
+                }],
+              } : p
+            ),
+          }));
+          ta.value = "";
+          adjustHeight();
+          addToast("Font list shown", "success");
+          return;
+        }
+        case "/export": {
+          if (!panel?.sessionKey) { addToast("No active session to export", "warning"); ta.value = ""; adjustHeight(); return; }
+          window.open(`/api/session/${encodeURIComponent(panel.sessionKey)}/export`, "_blank");
+          ta.value = "";
+          adjustHeight();
+          addToast("Export opened in new tab", "success");
           return;
         }
         case "/help": {
@@ -400,6 +455,14 @@ export function Composer({ panelIndex, disabled }: Props) {
           )}
         </div>
         <button
+          onClick={() => addToast("Voice input coming soon", "warning")}
+          disabled={disabled}
+          className="w-[28px] h-[28px] text-[var(--color-t3)] hover:text-[var(--color-t2)] hover:bg-[var(--color-bgh)] disabled:opacity-25 rounded flex items-center justify-center transition-colors flex-shrink-0"
+          title="Voice input (coming soon)"
+        >
+          <Mic size={13} />
+        </button>
+        <button
           onClick={handleSend}
           disabled={disabled || !textareaRef.current?.value?.trim()}
           className="w-[28px] h-[28px] bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-25 disabled:cursor-not-allowed rounded flex items-center justify-center transition-colors flex-shrink-0"
@@ -418,8 +481,28 @@ export function Composer({ panelIndex, disabled }: Props) {
           <AtSign size={8} />
           @ to mention
         </span>
+        <span className="flex items-center gap-0.5">
+          Ctrl+K to focus
+        </span>
         <span className="ml-auto">Shift+Enter for newline</span>
       </div>
     </div>
   );
+}
+
+// ── Ctrl+K focus shortcut ───────────────────────────
+if (typeof window !== "undefined") {
+  window.addEventListener("keydown", (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+      e.preventDefault();
+      const textareas = document.querySelectorAll("textarea");
+      for (const ta of textareas) {
+        if (!(ta as HTMLTextAreaElement).disabled) {
+          (ta as HTMLTextAreaElement).focus();
+          break;
+        }
+      }
+    }
+  });
+}
 }

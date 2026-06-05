@@ -371,7 +371,6 @@ export function ChatView({ panel }: Props) {
                     <MessageBubble
                       message={msg}
                       streaming={isStreaming}
-                      modelDotName={panel.model?.modelId || panel.sessionKey?.split("::")[1]?.slice(0, 12)}
                       showRegen={isLastAssistant}
                       onRegen={isLastAssistant ? handleRegenLast : undefined}
                     />

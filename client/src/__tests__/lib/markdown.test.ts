@@ -6,9 +6,9 @@ describe("renderMarkdown", () => {
     it("renders fenced code blocks with copy button", () => {
       const input = "```ts\nconst x = 1;\n```";
       const result = renderMarkdown(input);
-      expect(result).toContain("code-block-wrapper");
+      expect(result).toContain("code-block");
       expect(result).toContain("const x = 1");
-      expect(result).toContain("copy-btn");
+      expect(result).toContain("copy-code-btn");
       expect(result).toContain("Copy");
     });
 

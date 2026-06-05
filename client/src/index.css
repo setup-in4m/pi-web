@@ -23,6 +23,9 @@
 }
 
 /* Font scale variables — updated by themeStore.setFontScale() */
+body {
+  font-family: var(--font-sans);
+}
 :root {
   --font-scale: 1;
   --space-1: calc(2px * var(--font-scale));

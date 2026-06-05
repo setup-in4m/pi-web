@@ -78,7 +78,7 @@ marked.use({
         : "";
 
       return `<div class="code-block group">
-        <pre><code class="${detectedLang || lang ? 'language-' + escapeHtml(detectedLang || lang || '') : ''}">${highlighted}</code></pre>
+        <pre${detectedLang || lang ? ` data-lang="${escapeHtml(detectedLang || lang || '')}"` : ''}><code class="${detectedLang || lang ? 'language-' + escapeHtml(detectedLang || lang || '') : ''}">${highlighted}</code></pre>
         <div class="code-block-toolbar">
           ${runBtn}
           <button class="copy-code-btn" data-code="${escapedCode}" title="Copy" aria-label="Copy code">

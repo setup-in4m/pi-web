@@ -429,14 +429,28 @@ pre[class*="language-"],
 .sash-container .sash::before {
   content: "";
   position: absolute;
+  background: var(--color-bdl) !important;
+  border-radius: 1px;
+  pointer-events: none;
+  transition: none !important;
+}
+/* Vertical sash (side-by-side): thin vertical line */
+.sash-container .sash-vertical::before,
+.sash-container [class*="sash-vertical"]::before {
   top: 0;
   bottom: 0;
   left: 50%;
   width: 2px !important;
   transform: translateX(-50%);
-  background: var(--color-bdl) !important;
-  border-radius: 1px;
-  pointer-events: none;
+}
+/* Horizontal sash (stacked): thin horizontal line */
+.sash-container .sash-horizontal::before,
+.sash-container [class*="sash-horizontal"]::before {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px !important;
+  transform: translateY(-50%);
 }
 .sash-container .sash:hover {
   background: color-mix(in srgb, var(--color-accent) 40%, transparent) !important;
@@ -448,9 +462,6 @@ pre[class*="language-"],
 }
 
 /* Kill Allotment's built-in hover line + delayed animations */
-.sash-container .sash::before {
-  transition: none !important;
-}
 .sash-container .sash::after {
   display: none !important;
 }

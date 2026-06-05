@@ -3,81 +3,12 @@ import type { SessionRecord } from "../store.js";
 import * as store from "../store.js";
 import { agentDir, authStorage, modelRegistry } from "../config.js";
 import { broadcast } from "../ws/handler.js";
-import { readdirSync, existsSync, readFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-
-const EXTENSIONS_DIR = join(agentDir, "extensions");
-const GIT_DIR = join(agentDir, "git");
-
-interface ExtensionInfo {
-  id: string;
-  name: string;
-  version: string;
-  enabled: boolean;
-  description?: string;
-}
-
-function ensureExtensionsDir() {
-  if (!existsSync(EXTENSIONS_DIR)) {
-    mkdirSync(EXTENSIONS_DIR, { recursive: true });
-  }
-}
-
-function getEnabledExtensions(): string[] {
-  ensureExtensionsDir();
-  const enabled: string[] = [];
-
-  // Scan local extensions
-  scanExtDir(EXTENSIONS_DIR, enabled);
-
-  // Scan git-cloned extensions
-  if (existsSync(GIT_DIR)) {
-    scanGitForExtensions(GIT_DIR, enabled, 0);
-  }
-
-  return enabled;
-}
-
-function scanGitForExtensions(dir: string, enabled: string[], depth: number) {
-  if (depth >= 4) return;
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const fullPath = join(dir, entry.name);
-      const extSubdir = join(fullPath, "extensions");
-      if (existsSync(extSubdir)) scanExtDir(extSubdir, enabled);
-      if (isExtensionDir(fullPath)) enabled.push(fullPath);
-      scanGitForExtensions(fullPath, enabled, depth + 1);
-    }
-  } catch { /* skip */ }
-}
-
-function scanExtDir(dir: string, enabled: string[]) {
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (isExtensionDir(fullPath)) enabled.push(fullPath);
-      } else if (entry.isFile() && (entry.name.endsWith(".ts") || entry.name.endsWith(".js") || entry.name.endsWith(".mjs"))) {
-        // Single-file extension — include the directory containing it
-        if (!enabled.includes(dir)) enabled.push(dir);
-      }
-    }
-  } catch { /* skip */ }
-}
-
-function isExtensionDir(dir: string): boolean {
-  return existsSync(join(dir, "package.json")) || existsSync(join(dir, "config.json"));
-}
 
 function buildSessionConfig(overrides: Record<string, unknown> = {}) {
   return {
     agentDir,
     authStorage,
     modelRegistry,
-    extensions: getEnabledExtensions(),
     ...overrides,
   };
 }

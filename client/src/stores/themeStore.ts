@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ThemeMode = "dark" | "light" | "system" | "solarized-dark" | "tokyo-night" | "catppuccin" | "nord";
+export type ThemeMode = "dark" | "light" | "system" | "solarized-dark" | "solarized-light" | "tokyo-night" | "catppuccin" | "catppuccin-latte" | "nord" | "rose-pine" | "rose-pine-dawn";
 export type Density = "compact" | "normal" | "comfortable";
 export type AccentColor = "purple" | "blue" | "green" | "orange" | "pink" | "teal" | "red" | "amber" | "cyan";
 export type CodeTheme = "dark" | "light" | "monokai" | "dracula" | "nord" | "github";

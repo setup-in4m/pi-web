@@ -92,6 +92,62 @@
   --color-t3: #616e88;
 }
 
+/* Rose Pine */
+[data-theme="rose-pine"] {
+  --color-bg: #191724;
+  --color-bg2: #1f1d2e;
+  --color-bg3: #26233a;
+  --color-bgh: #2c2943;
+  --color-bga: #353150;
+  --color-bd: #3b3757;
+  --color-bdl: #4a4668;
+  --color-t1: #e0def4;
+  --color-t2: #908caa;
+  --color-t3: #6e6a86;
+}
+
+/* Solarized Light */
+[data-theme="solarized-light"] {
+  --color-bg: #fdf6e3;
+  --color-bg2: #f5eed5;
+  --color-bg3: #eee8d5;
+  --color-bgh: #e5dfc5;
+  --color-bga: #dcd5b8;
+  --color-bd: #d3cba5;
+  --color-bdl: #c0b78a;
+  --color-t1: #657b83;
+  --color-t2: #839496;
+  --color-t3: #93a1a1;
+}
+
+/* Catppuccin Latte */
+[data-theme="catppuccin-latte"] {
+  --color-bg: #eff1f5;
+  --color-bg2: #e6e9ef;
+  --color-bg3: #ccd0da;
+  --color-bgh: #bcc0cc;
+  --color-bga: #acb0be;
+  --color-bd: #9ca0b0;
+  --color-bdl: #8c8fa1;
+  --color-t1: #4c4f69;
+  --color-t2: #5c5f77;
+  --color-t3: #9ca0b0;
+}
+
+/* Rose Pine Dawn */
+[data-theme="rose-pine-dawn"] {
+  --color-bg: #faf4ed;
+  --color-bg2: #f2e9de;
+  --color-bg3: #e5dfd5;
+  --color-bgh: #d9d2c5;
+  --color-bga: #cec8b8;
+  --color-bd: #c4bcab;
+  --color-bdl: #b0a898;
+  --color-t1: #575279;
+  --color-t2: #797593;
+  --color-t3: #9893a5;
+}
+
 /* Light code theme overrides */
 [data-code-theme="light"] .code-block-wrapper pre {
   background: #f6f8fa !important;

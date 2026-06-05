@@ -2,17 +2,10 @@ import { Router } from "express";
 import { readdirSync, existsSync, readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
 import { join, basename } from "node:path";
 import { agentDir } from "../config.js";
+import { SettingsManager } from "@earendil-works/pi-coding-agent";
 
 const router = Router();
-
 const EXTENSIONS_DIR = join(agentDir, "extensions");
-const GIT_DIR = join(agentDir, "git");
-
-function ensureDir() {
-  if (!existsSync(EXTENSIONS_DIR)) {
-    mkdirSync(EXTENSIONS_DIR, { recursive: true });
-  }
-}
 
 interface ExtensionInfo {
   id: string;
@@ -22,131 +15,93 @@ interface ExtensionInfo {
   description?: string;
 }
 
-function listLocalExtensions(): ExtensionInfo[] {
-  ensureDir();
-  const result: ExtensionInfo[] = [];
+async function listExtensions(): Promise<ExtensionInfo[]> {
+  const extensions: ExtensionInfo[] = [];
+  const seen = new Set<string>();
 
-  // Scan installed extensions directory
-  scanExtensionsDir(EXTENSIONS_DIR, result);
+  try {
+    // Read from pi's settings.json (same source as pi CLI)
+    const settings = SettingsManager.create(process.cwd(), agentDir);
+    const packages = settings.getPackages();
+    const extPaths = settings.getExtensionPaths();
 
-  // Scan git-cloned extensions (pi installs via git here)
-  if (existsSync(GIT_DIR)) {
-    try {
-      scanGitDir(GIT_DIR, "", result);
-    } catch (e: any) {
-      console.error(`[extensions] Failed to scan git dir ${GIT_DIR}:`, e.message);
+    // Map configured packages
+    for (const pkg of packages) {
+      const sourceStr = typeof pkg === "string" ? pkg : (pkg as any).source || String(pkg);
+      const id = sourceStr.replace(/[:\/]/g, "-");
+      if (seen.has(id)) continue;
+      seen.add(id);
+      extensions.push({
+        id,
+        name: sourceStr,
+        version: "0.0.0",
+        enabled: true,
+        description: typeof pkg === "string" ? `Package: ${pkg}` : undefined,
+      });
+    }
+
+    // Map resolved extension paths
+    for (const extPath of extPaths) {
+      const name = basename(extPath);
+      const id = name.toLowerCase().replace(/\s+/g, "-");
+      if (seen.has(id)) continue;
+      seen.add(id);
+      extensions.push({
+        id,
+        name,
+        version: "0.0.0",
+        enabled: true,
+        description: `Path: ${extPath}`,
+      });
+    }
+  } catch (e: any) {
+    console.error("[extensions] SettingsManager failed:", e.message);
+  }
+
+  // Fallback: scan local extensions directory
+  const localExts = listLocalExtensionDirs();
+  for (const local of localExts) {
+    if (!seen.has(local.id)) {
+      seen.add(local.id);
+      extensions.push(local);
     }
   }
 
+  return extensions;
+}
+
+function listLocalExtensionDirs(): ExtensionInfo[] {
+  const result: ExtensionInfo[] = [];
+  try {
+    if (!existsSync(EXTENSIONS_DIR)) return result;
+    const entries = readdirSync(EXTENSIONS_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const fullPath = join(EXTENSIONS_DIR, entry.name);
+      const pkgPath = join(fullPath, "package.json");
+      const cfgPath = join(fullPath, "config.json");
+      if (existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+          result.push({ id: entry.name, name: pkg.displayName || pkg.name || entry.name, version: pkg.version || "0.0.0", enabled: pkg.enabled !== false, description: pkg.description });
+        } catch { /* skip */ }
+      } else if (existsSync(cfgPath)) {
+        try {
+          const cfg = JSON.parse(readFileSync(cfgPath, "utf-8"));
+          result.push({ id: entry.name, name: cfg.displayName || cfg.name || entry.name, version: cfg.version || "0.0.0", enabled: cfg.enabled !== false, description: cfg.description });
+        } catch { /* skip */ }
+      } else {
+        result.push({ id: entry.name, name: entry.name, version: "0.0.0", enabled: true });
+      }
+    }
+  } catch { /* skip */ }
   return result;
 }
 
-function scanGitDir(dir: string, prefix: string, result: ExtensionInfo[]) {
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const fullPath = join(dir, entry.name);
-      const displayPrefix = prefix ? `${prefix}/${entry.name}` : entry.name;
-
-      // Check if this directory has extensions/ subdir
-      const extSubdir = join(fullPath, "extensions");
-      if (existsSync(extSubdir)) {
-        scanExtensionsDir(extSubdir, result, displayPrefix);
-      }
-
-      // Check if this directory IS an extension (has package.json or config.json)
-      const repoPkg = join(fullPath, "package.json");
-      const repoCfg = join(fullPath, "config.json");
-      if (existsSync(repoPkg) || existsSync(repoCfg)) {
-        readExtensionManifest(fullPath, entry.name, displayPrefix, result);
-      }
-
-      // Recurse deeper (for github.com/org/repo structures)
-      // Stop at 4 levels to avoid infinite recursion
-      const depth = displayPrefix.split("/").length;
-      if (depth < 4) {
-        scanGitDir(fullPath, displayPrefix, result);
-      }
-    }
-  } catch (e: any) {
-    console.error(`[extensions] Failed to scan ${dir}:`, e.message);
-  }
-}
-
-function scanExtensionsDir(dir: string, result: ExtensionInfo[], prefix = "") {
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      const displayId = prefix ? `${prefix}/${entry.name}` : entry.name;
-
-      if (entry.isDirectory()) {
-        // Directory-based extension (has its own manifest)
-        readExtensionManifest(fullPath, entry.name, displayId, result);
-      } else if (entry.isFile() && (entry.name.endsWith(".ts") || entry.name.endsWith(".js") || entry.name.endsWith(".mjs"))) {
-        // Single-file extension (pi SDK format)
-        const extName = entry.name.replace(/\.(ts|js|mjs)$/, "");
-        result.push({
-          id: prefix ? `${prefix}/${extName}` : extName,
-          name: extName,
-          version: "0.0.0",
-          enabled: true,
-          description: `File extension`,
-        });
-      }
-    }
-  } catch (e: any) {
-    console.error(`[extensions] Failed to read ${dir}:`, e.message);
-  }
-}
-
-function readExtensionManifest(fullPath: string, name: string, displayId: string, result: ExtensionInfo[]) {
-  const manifestPath = join(fullPath, "package.json");
-  const configPath = join(fullPath, "config.json");
-
-  if (existsSync(manifestPath)) {
-    try {
-      const pkg = JSON.parse(readFileSync(manifestPath, "utf-8"));
-      result.push({
-        id: displayId,
-        name: pkg.displayName || pkg.name || name,
-        version: pkg.version || "0.0.0",
-        enabled: pkg.enabled !== false,
-        description: pkg.description,
-      });
-    } catch (e: any) {
-      console.error(`[extensions] Failed to parse ${manifestPath}:`, e.message);
-    }
-  } else if (existsSync(configPath)) {
-    try {
-      const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
-      result.push({
-        id: displayId,
-        name: cfg.displayName || cfg.name || name,
-        version: cfg.version || "0.0.0",
-        enabled: cfg.enabled !== false,
-        description: cfg.description,
-      });
-    } catch (e: any) {
-      console.error(`[extensions] Failed to parse ${configPath}:`, e.message);
-    }
-  } else {
-    // No manifest — list it anyway
-    result.push({
-      id: displayId,
-      name: name,
-      version: "0.0.0",
-      enabled: true,
-      description: "No manifest",
-    });
-  }
-}
-
 // List extensions
-router.get("/extensions", (_req, res) => {
+router.get("/extensions", async (_req, res) => {
   try {
-    const extensions = listLocalExtensions();
+    const extensions = await listExtensions();
     res.json({ extensions });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -159,7 +114,9 @@ router.post("/extensions/install", async (req, res) => {
     const { path } = req.body;
     if (!path) return res.status(400).json({ error: "path required" });
 
-    ensureDir();
+    if (!existsSync(EXTENSIONS_DIR)) {
+      mkdirSync(EXTENSIONS_DIR, { recursive: true });
+    }
 
     // Simple copy: treat the path as a folder to symlink/copy
     if (!existsSync(path)) {

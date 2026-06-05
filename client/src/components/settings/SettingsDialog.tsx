@@ -253,15 +253,19 @@ export function SettingsDialog({ open, onClose }: Props) {
               {/* Theme mode */}
               <div>
                 <div className="text-[11px] font-medium text-[var(--color-t2)] mb-2">Theme</div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {([
                     { value: "dark" as ThemeMode, icon: Moon, label: "Dark" },
                     { value: "light" as ThemeMode, icon: Sun, label: "Light" },
                     { value: "system" as ThemeMode, icon: Monitor, label: "System" },
-                    { value: "solarized-dark" as ThemeMode, icon: Moon, label: "Solarized" },
-                    { value: "tokyo-night" as ThemeMode, icon: Moon, label: "Tokyo Night" },
                     { value: "catppuccin" as ThemeMode, icon: Moon, label: "Catppuccin" },
+                    { value: "catppuccin-latte" as ThemeMode, icon: Sun, label: "Catppuccin Latte" },
+                    { value: "tokyo-night" as ThemeMode, icon: Moon, label: "Tokyo Night" },
                     { value: "nord" as ThemeMode, icon: Moon, label: "Nord" },
+                    { value: "solarized-dark" as ThemeMode, icon: Moon, label: "Solarized Dark" },
+                    { value: "solarized-light" as ThemeMode, icon: Sun, label: "Solarized Light" },
+                    { value: "rose-pine" as ThemeMode, icon: Moon, label: "Rose Pine" },
+                    { value: "rose-pine-dawn" as ThemeMode, icon: Sun, label: "Rose Pine Dawn" },
                   ]).map((opt) => {
                     const Icon = opt.icon;
                     return (

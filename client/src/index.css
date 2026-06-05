@@ -409,11 +409,13 @@ pre[class*="language-"],
 }
 
 /* Allotment splitter theming */
+.split-view {
+  --separator-border: transparent !important;
+  --sash-hover-size: 0px !important;
+}
 .split-view-container {
   background: var(--color-bg) !important;
-  --separator-border: transparent;
   --focus-border: var(--color-accent);
-  --sash-hover-size: 0px;
 }
 .split-view-view {
   background: var(--color-bg) !important;
@@ -440,9 +442,8 @@ pre[class*="language-"],
   background: color-mix(in srgb, var(--color-accent) 40%, transparent) !important;
 }
 
-/* Active panel: color the whole sash center line accent */
-.split-view-view:has([data-panel-active]) + .sash-container .sash::before,
-.sash-container:has(+ .split-view-view:has([data-panel-active])) .sash::before {
+/* Active panel: color sashes at this split level accent */
+.split-view:has([data-panel-active]) > .sash-container .sash::before {
   background: var(--color-accent);
 }
 

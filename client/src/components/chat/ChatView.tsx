@@ -1,11 +1,12 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, Copy, Pencil, SendHorizontal, GitFork, Bot, Pin } from "lucide-react";
+import { ArrowDown, Copy, Pencil, SendHorizontal, GitFork, Bot, Pin, RotateCcw, ArrowUp } from "lucide-react";
 import type { PanelData } from "../../stores/panelStore";
 import { usePanelStore } from "../../stores/panelStore";
 import { MessageBubble } from "./MessageBubble";
 import { ChatSkeleton } from "../Skeletons";
 import { useToastStore } from "../../stores/toastStore";
+import * as api from "../../lib/api";
 
 interface Props {
   panel: PanelData;
@@ -23,7 +24,9 @@ export function ChatView({ panel }: Props) {
   const spawnSubAgent = usePanelStore((s) => s.spawnSubAgent);
   const pinMessage = usePanelStore((s) => s.pinMessage);
   const unpinMessage = usePanelStore((s) => s.unpinMessage);
+  const regenLastMessage = usePanelStore((s) => s.regenLastMessage);
   const addToast = useToastStore((s) => s.addToast);
+  const [dragOver, setDragOver] = useState(false);
 
   const virtualizer = useVirtualizer({
     count: panel.messages.length,
@@ -113,6 +116,82 @@ export function ChatView({ panel }: Props) {
     setEditText("");
   };
 
+  // ── Load earlier messages ────────────────────────────────
+
+  const handleLoadEarlier = useCallback(async () => {
+    if (!panel.sessionKey) return;
+    addToast("Loading earlier messages…", "success");
+    // Re-fetch full transcript (server-side pagination not yet implemented,
+    // this refreshes the entire transcript as a fallback)
+    try {
+      const transcript = await api.getTranscript(panel.sessionKey);
+      const panelIdx = panels.indexOf(panel);
+      if (panelIdx >= 0) {
+        usePanelStore.setState((s) => ({
+          panels: s.panels.map((p, i) =>
+            i === panelIdx
+              ? { ...p, messages: transcript.transcript, usage: transcript.usage }
+              : p
+          ),
+        }));
+      }
+      addToast("Transcript refreshed", "success");
+    } catch {
+      addToast("Failed to load messages", "error");
+    }
+  }, [panel.sessionKey, panel, panels, addToast]);
+
+  // ── Drag-drop handlers ───────────────────────────────────
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only accept files
+    if (e.dataTransfer.types.includes("Files")) {
+      setDragOver(true);
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only clear if we left the container (not entering a child)
+    if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOver(false);
+      const files = Array.from(e.dataTransfer.files);
+      const imageFiles = files.filter((f) =>
+        /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f.name) || f.type.startsWith("image/")
+      );
+      if (imageFiles.length > 0) {
+        addToast(`Image upload not yet configured (${imageFiles.length} file${imageFiles.length > 1 ? "s" : ""})`, "warning");
+      } else if (files.length > 0) {
+        addToast(`${files.length} file${files.length > 1 ? "s" : ""} dropped — only images are supported for now`, "warning");
+      }
+    },
+    [addToast]
+  );
+
+  // ── Regen handler ────────────────────────────────────────
+
+  const handleRegenLast = useCallback(async () => {
+    const panelIdx = panels.indexOf(panel);
+    if (panelIdx < 0) return;
+    try {
+      await regenLastMessage(panelIdx);
+    } catch (e: any) {
+      addToast(e.message || "Regen failed", "error");
+    }
+  }, [panels, panel, regenLastMessage, addToast]);
+
   if (panel.loadingMessages) {
     return <ChatSkeleton />;
   }
@@ -147,7 +226,40 @@ export function ChatView({ panel }: Props) {
       <div aria-live="polite" aria-atomic="true" className="sr-only" role="status">
         {liveAnnouncement}
       </div>
-      <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 overflow-y-auto">
+
+      {/* ── Drag-drop overlay ──────────────────────────────── */}
+      {dragOver && (
+        <div className="absolute inset-0 z-30 bg-[var(--color-accent)]/10 border-2 border-dashed border-[var(--color-accent)] rounded-lg flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-1 text-[var(--color-accent)]">
+            <span className="text-2xl">🖼</span>
+            <span className="text-xs font-medium">Drop images here</span>
+            <span className="text-[9px] opacity-70">PNG, JPG, GIF, WebP</span>
+          </div>
+        </div>
+      )}
+
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className="absolute inset-0 overflow-y-auto"
+      >
+        {/* ── Load earlier messages ────────────────────────── */}
+        {panel.messages.length > 20 && !panel.loadingMessages && (
+          <div className="flex justify-center pt-2 pb-1">
+            <button
+              onClick={handleLoadEarlier}
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-[9px] text-[var(--color-t3)] hover:text-[var(--color-t2)] hover:bg-[var(--color-bgh)] transition-colors"
+              title="Refresh transcript from server"
+            >
+              <ArrowUp size={10} />
+              Load earlier messages
+            </button>
+          </div>
+        )}
+
         {/* Pinned messages */}
         {panel.pinnedIndices && panel.pinnedIndices.length > 0 && (
           <div className="sticky top-0 z-10 bg-[var(--color-bg)]/95 backdrop-blur-sm border-b border-[var(--color-accent)]/30 px-3 py-1.5 mb-1">
@@ -168,6 +280,7 @@ export function ChatView({ panel }: Props) {
                     }}
                     className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--color-bg2)] border border-[var(--color-bd)] flex items-center justify-center opacity-0 group-hover/pinned:opacity-100 transition-opacity hover:border-[var(--color-danger)]"
                     title="Unpin"
+                    aria-label="Unpin message"
                   >
                     <span className="text-[8px] leading-none">✕</span>
                   </button>
@@ -187,6 +300,10 @@ export function ChatView({ panel }: Props) {
             const msg = panel.messages[i];
             const isStreaming = panel.streaming && i === panel.messages.length - 1 && msg.role === "assistant";
             const isEditing = editingIndex === i;
+            const isLastAssistant =
+              msg.role === "assistant" &&
+              i === panel.messages.length - 1 &&
+              !panel.streaming;
 
             return (
               <div
@@ -303,6 +420,17 @@ export function ChatView({ panel }: Props) {
                           aria-label="Spawn sub-agent"
                         >
                           <Bot size={11} aria-hidden="true" />
+                        </button>
+                      )}
+                      {/* Regen button — only on the LAST assistant message */}
+                      {isLastAssistant && panel.sessionKey && (
+                        <button
+                          onClick={handleRegenLast}
+                          className="p-0.5 rounded text-[var(--color-t3)] hover:text-[#22c55e] hover:bg-[var(--color-bgh)] transition-colors"
+                          title="Regenerate response"
+                          aria-label="Regenerate last response"
+                        >
+                          <RotateCcw size={11} aria-hidden="true" />
                         </button>
                       )}
                       {/* Pin button */}

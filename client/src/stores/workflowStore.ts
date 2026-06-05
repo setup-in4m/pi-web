@@ -1,11 +1,26 @@
 import { create } from "zustand";
 
+export type StepType = "prompt" | "decision" | "loop";
+export type LoopType = "for" | "while" | "doWhile";
+
 export interface WorkflowStep {
   id: string;
+  stepType: StepType;
+  // ── Prompt fields ──────────────────────────
   model?: { provider: string; modelId: string };
   thinking: string;
   prompt: string;
   isParallel: boolean; // if true, runs concurrently with adjacent parallel steps
+  // ── Decision fields ────────────────────────
+  condition?: string;                                    // prompt asking model for YES/NO
+  decisionModel?: { provider: string; modelId: string }; // model to make decision
+  trueBranch?: string[];   // step IDs to run on YES
+  falseBranch?: string[];  // step IDs to run on NO
+  // ── Loop fields ────────────────────────────
+  loopType?: LoopType;
+  maxIterations?: number;  // for "for" loops
+  loopCondition?: string;  // for "while" / "doWhile" — evaluated by model
+  bodySteps?: string[];    // step IDs inside the loop body
 }
 
 export type WorkflowMode = "chain" | "parallel";
@@ -14,7 +29,7 @@ export interface WorkflowTemplate {
   name: string;
   description: string;
   mode: WorkflowMode;
-  steps: (Partial<WorkflowStep> & { prompt: string })[];
+  steps: (Partial<WorkflowStep> & { prompt?: string })[];
 }
 
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
@@ -69,6 +84,18 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       { thinking: "off", prompt: "Solve this problem and explain your reasoning.", isParallel: true },
     ],
   },
+  {
+    name: "Audit + Fix Loops",
+    description: "Audit code, fix issues in a loop until clean",
+    mode: "chain",
+    steps: [
+      { thinking: "medium", prompt: "Audit this code for bugs, security issues, and style problems. List each issue found.", isParallel: false },
+      { stepType: "decision" as const, condition: "Are there any remaining issues to fix? Answer YES or NO.", isParallel: false },
+      { stepType: "loop" as const, loopType: "while" as const, loopCondition: "Are there remaining issues? Answer YES or NO.", maxIterations: 5, isParallel: false },
+      { thinking: "medium", prompt: "Fix the highest-priority issue identified. Show before/after diff.", isParallel: false },
+      { thinking: "low", prompt: "Re-audit the code after the fix. List any remaining issues.", isParallel: false },
+    ],
+  },
 ];
 
 interface WorkflowState {
@@ -77,35 +104,64 @@ interface WorkflowState {
   mode: WorkflowMode;
 
   setOpen: (open: boolean) => void;
-  addStep: () => void;
+  addStep: (type?: StepType) => void;
   removeStep: (id: string) => void;
   updateStep: (id: string, updates: Partial<Omit<WorkflowStep, "id">>) => void;
   setMode: (mode: WorkflowMode) => void;
   loadTemplate: (template: WorkflowTemplate) => void;
   clearSteps: () => void;
+  reorderSteps: (fromIndex: number, toIndex: number) => void;
 }
 
 let nextId = 1;
 
+function createDefaultStep(type: StepType = "prompt"): Omit<WorkflowStep, "id"> {
+  const base = { thinking: "off", prompt: "", isParallel: false };
+  if (type === "decision") {
+    return { ...base, stepType: "decision", condition: "", trueBranch: [], falseBranch: [] };
+  }
+  if (type === "loop") {
+    return { ...base, stepType: "loop", loopType: "for", maxIterations: 3, bodySteps: [], loopCondition: "" };
+  }
+  return { ...base, stepType: "prompt" };
+}
+
 export const useWorkflowStore = create<WorkflowState>((set) => ({
   open: false,
   steps: [
-    { id: "1", thinking: "off", prompt: "", isParallel: false },
-    { id: "2", thinking: "off", prompt: "", isParallel: false },
+    { id: "1", stepType: "prompt", thinking: "off", prompt: "", isParallel: false },
+    { id: "2", stepType: "prompt", thinking: "off", prompt: "", isParallel: false },
   ],
   mode: "chain",
 
   setOpen: (open) => set({ open }),
 
-  addStep: () =>
+  addStep: (type: StepType = "prompt") =>
     set((s) => ({
-      steps: [...s.steps, { id: String(++nextId), thinking: "off", prompt: "", isParallel: false }],
+      steps: [...s.steps, { id: String(++nextId), ...createDefaultStep(type) }],
     })),
 
   removeStep: (id) =>
-    set((s) => ({
-      steps: s.steps.filter((st) => st.id !== id),
-    })),
+    set((s) => {
+      // Also clean up references from decision/loop branches pointing to this step
+      const cleaned = s.steps.map((st) => {
+        if (st.stepType === "decision") {
+          return {
+            ...st,
+            trueBranch: (st.trueBranch || []).filter((bid) => bid !== id),
+            falseBranch: (st.falseBranch || []).filter((bid) => bid !== id),
+          };
+        }
+        if (st.stepType === "loop") {
+          return {
+            ...st,
+            bodySteps: (st.bodySteps || []).filter((bid) => bid !== id),
+          };
+        }
+        return st;
+      });
+      return { steps: cleaned.filter((st) => st.id !== id) };
+    }),
 
   updateStep: (id, updates) =>
     set((s) => ({
@@ -117,10 +173,20 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   loadTemplate: (template) => {
     set({
       steps: template.steps.map((s) => ({
-        ...s,
+        stepType: (s.stepType as StepType) || "prompt",
         id: String(++nextId),
         isParallel: s.isParallel ?? (template.mode === "parallel"),
         thinking: s.thinking || "off",
+        prompt: s.prompt || "",
+        condition: s.condition,
+        decisionModel: s.decisionModel,
+        trueBranch: s.trueBranch,
+        falseBranch: s.falseBranch,
+        loopType: s.loopType as LoopType | undefined,
+        loopCondition: s.loopCondition,
+        maxIterations: s.maxIterations,
+        bodySteps: s.bodySteps,
+        model: s.model,
       })),
       mode: template.mode,
     });
@@ -128,6 +194,14 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   clearSteps: () =>
     set({
-      steps: [{ id: String(++nextId), thinking: "off", prompt: "", isParallel: false }],
+      steps: [{ id: String(++nextId), stepType: "prompt", thinking: "off", prompt: "", isParallel: false }],
+    }),
+
+  reorderSteps: (fromIndex, toIndex) =>
+    set((s) => {
+      const steps = [...s.steps];
+      const [moved] = steps.splice(fromIndex, 1);
+      steps.splice(toIndex, 0, moved);
+      return { steps };
     }),
 }));

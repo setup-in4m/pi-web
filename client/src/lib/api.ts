@@ -2,6 +2,20 @@
 // In dev, Vite proxies /api to the server so BASE is empty.
 const BASE = import.meta.env.DEV ? "" : "http://localhost:3456";
 
+// URL-safe base64 (RFC 4648 §5) — server decodes with 'base64url'
+// Standard btoa produces + / = which break URL path segments
+function toBase64Url(str: string): string {
+  const utf8 = new TextEncoder().encode(str);
+  let binary = "";
+  for (let i = 0; i < utf8.length; i++) {
+    binary += String.fromCharCode(utf8[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, {
     headers: { "Content-Type": "application/json" },
@@ -80,8 +94,13 @@ export const fetchModels = () =>
 export const browseFolder = () =>
   api.post<{ cancelled: boolean; path?: string; error?: string }>("/api/browse-folder");
 
-export const fetchWorkspace = (path: string) =>
-  api.get<WorkspaceData>(`/api/workspace/${btoa(path)}`);
+export const fetchWorkspace = (path: string, limit?: number, offset?: number) => {
+  const params = new URLSearchParams();
+  if (limit != null) params.set("limit", String(limit));
+  if (offset != null) params.set("offset", String(offset));
+  const qs = params.toString();
+  return api.get<WorkspaceData>(`/api/workspace/${toBase64Url(path)}${qs ? "?" + qs : ""}`);
+};
 
 export const fetchWorkspaces = () =>
   api.get<{ workspaces: { path: string; name: string; addedAt: string }[] }>("/api/workspaces");
@@ -115,6 +134,9 @@ export const setThinking = (key: string, level: string) =>
 export const closeSession = (key: string) =>
   api.delete<{ ok: boolean }>(`/api/session/${encodeURIComponent(key)}`);
 
+export const deleteSession = (key: string) =>
+  api.delete<{ ok: boolean }>(`/api/session/${encodeURIComponent(key)}/permanent`);
+
 export const spawnSubAgent = (key: string, task: string, options?: { model?: string; thinking?: string }) =>
   api.post<{ ok: boolean; subSessionKey: string; subSessionId: string }>(
     `/api/session/${encodeURIComponent(key)}/subagent`,
@@ -140,6 +162,9 @@ export const installExtension = (path: string) =>
 
 export const toggleExtension = (id: string, enabled: boolean) =>
   api.post<{ ok: boolean; enabled: boolean }>(`/api/extensions/${encodeURIComponent(id)}/toggle`, { enabled });
+
+export const removeWorkspace = (path: string) =>
+  api.delete<{ ok: boolean }>(`/api/workspace/${toBase64Url(path)}`);
 
 export const clearAllData = () =>
   api.delete<{ ok: boolean }>("/api/data");

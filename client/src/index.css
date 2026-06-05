@@ -22,6 +22,25 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* Font scale variables — updated by themeStore.setFontScale() */
+:root {
+  --font-scale: 1;
+  --space-1: calc(2px * var(--font-scale));
+  --space-2: calc(4px * var(--font-scale));
+  --space-3: calc(6px * var(--font-scale));
+  --space-4: calc(8px * var(--font-scale));
+  --radius-sm: calc(3px * var(--font-scale));
+  --radius-md: calc(6px * var(--font-scale));
+  --radius-lg: calc(10px * var(--font-scale));
+}
+
+/* Scale Lucide and other SVG icons with font size */
+svg.lucide,
+[class*="lucide"] {
+  width: auto !important;
+  height: 1em !important;
+}
+
 /* Light theme overrides */
 [data-theme="light"] {
   --color-bg: #f8f9fc;
@@ -298,7 +317,7 @@ body,
   background: var(--color-bg);
   color: var(--color-t1);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: calc(13px * var(--font-scale));
 }
 
 /* Override Tailwind font utilities to use dynamic CSS variables */

@@ -36,17 +36,20 @@ export async function openFolder(): Promise<string | null> {
   if (!isTauri) return null;
 
   try {
-    const invoke = await getInvoke();
-    if (!invoke) return null;
-
     const { open } = await import("@tauri-apps/plugin-dialog");
     const result = await open({
       directory: true,
       multiple: false,
       title: "Select project folder",
     });
-    return result as string | null;
-  } catch {
+    // Defensive: ensure we return a string or null (not an array, not an object)
+    if (result === null || result === undefined) return null;
+    if (typeof result === "string") return result;
+    if (Array.isArray(result as any) && (result as any).length > 0) return String((result as any)[0]);
+    console.error("[tauri] openFolder: unexpected result type", typeof result, result);
+    return null;
+  } catch (e) {
+    console.error("[tauri] openFolder failed:", e);
     return null;
   }
 }

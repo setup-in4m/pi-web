@@ -164,6 +164,57 @@ export function getCacheStats(): { hits: number; misses: number; size: number } 
   return { hits: cacheHits, misses: cacheMisses, size: cache.size };
 }
 
+// ── Tool syntax stripping (leaked tool calls in visible output) ────
+
+const TOOL_CALL_RE = /\[TOOL_CALL\][\s\S]*?\[\/TOOL_CALL\]/gi;
+const EXEC_FENCE_RE = /```(?:web_search|read_file|write_file|create_document|edit_document|update_document)\s*\n[\s\S]*?```/gi;
+const XML_TOOL_CALL_RE = /<(?:[\w]+:)?(?:tool_call|function_call)>[\s\S]*?<\/(?:[\w]+:)?(?:tool_call|function_call)>/gi;
+const XML_INVOKE_RE = /<invoke\s+name=['"][^'"]*['"]>[\s\S]*?<\/invoke>/gi;
+const DSML_TOOL_RE = /<\s*[｜|]+\s*DSML\s*[｜|]+\s*tool_calls\s*>[\s\S]*?(?:<\s*\/\s*[｜|]+\s*DSML\s*[｜|]+\s*tool_calls\s*>|$)/gi;
+const DSML_STRAY_RE = /<\s*\/?\s*[｜|]+\s*DSML\s*[｜|]+[^>]*>/gi;
+const TOOL_NARRATION_RE = /(?:The (?:result|output) shows?:?\s*)?-?\s*(?:stdout|stderr|exit_code):\s*.+/gi;
+
+/** Strip tool-call syntax that some models leak into visible text */
+export function toolSyntaxStrip(text: string): string {
+  let cleaned = text.replace(TOOL_CALL_RE, '');
+  cleaned = cleaned.replace(EXEC_FENCE_RE, '');
+  cleaned = cleaned.replace(DSML_TOOL_RE, '');
+  cleaned = cleaned.replace(DSML_STRAY_RE, '');
+  cleaned = cleaned.replace(XML_TOOL_CALL_RE, '');
+  cleaned = cleaned.replace(XML_INVOKE_RE, '');
+  cleaned = cleaned.replace(TOOL_NARRATION_RE, '');
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  return cleaned.trim();
+}
+
+// ── Progressive streaming: squash markdown inside unclosed code fences ──
+
+/**
+ * During streaming, if there are unclosed code fences, the text after
+ * the last open fence should NOT be rendered as markdown (avoids headings,
+ * lists, etc. appearing mid-stream inside code blocks).
+ * Split by ```, render even segments as markdown, odd as escaped pre text.
+ */
+export function squashOutsideCode(text: string): string {
+  if (!text.includes('```')) return text;
+  const parts = text.split('```');
+  // If parts.length is even, all fences are closed — safe to render as markdown
+  if (parts.length % 2 === 0) return text;
+
+  // Odd count → last segment is inside an unclosed code fence.
+  // Render all even-indexed segments (0,2,4…) as markdown,
+  // all odd-indexed segments (1,3,5…) as escaped pre text.
+  let result = '';
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) {
+      result += parts[i];
+    } else {
+      result += '\n```' + escapeHtml(parts[i]) + '```';
+    }
+  }
+  return result;
+}
+
 export function renderMarkdown(text: string): string {
   // Check cache
   const cached = cache.get(text);
@@ -189,8 +240,11 @@ export function renderMarkdown(text: string): string {
     if (oldestKey) cache.delete(oldestKey);
   }
 
+  // Pre-process: strip leaked tool syntax, squash unclosed code fences
+  let processed = toolSyntaxStrip(text);
+  processed = squashOutsideCode(processed);
+
   // Pre-process math: $$...$$ (display) and $...$ (inline)
-  let processed = text;
   try {
     // Display math: $$...$$
     processed = processed.replace(/\$\$([\s\S]*?)\$\$/g, (_: string, formula: string) => {

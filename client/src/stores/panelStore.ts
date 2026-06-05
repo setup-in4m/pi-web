@@ -72,6 +72,13 @@ interface PanelState extends PanelSlice {
   // Pinning
   pinMessage: (panelIdx: number, msgIdx: number) => void;
   unpinMessage: (panelIdx: number, msgIdx: number) => void;
+
+  // Regen
+  regenLastMessage: (index: number) => Promise<void>;
+
+  // Live thinking (streaming)
+  upsertLiveThinking: (key: string, thinkingContent: string) => void;
+  closeLiveThinking: (key: string) => void;
 }
 
 const STORAGE_KEY = "pi-web-panels";
@@ -135,8 +142,8 @@ export const usePanelStore = create<PanelState>((set, get) => {
 
     switch (event.eventType) {
       case "message_start":
-        // Flush thinking content into a thinking block if we have any
-        state.flushThinking(event.sessionKey);
+        // Close live thinking block (convert from streaming to static foldable)
+        state.closeLiveThinking(event.sessionKey);
         // Reset streaming token counter at start of new message
         state.setStreamingTokens(event.sessionKey, 0);
         // Reset thinking token counter
@@ -156,7 +163,8 @@ export const usePanelStore = create<PanelState>((set, get) => {
         break;
       case "thinking_delta":
         if (event.text) {
-          state.setThinkingContent(event.sessionKey, event.text);
+          // Progressive live thinking block (visible during streaming)
+          state.upsertLiveThinking(event.sessionKey, event.text);
           // Track thinking tokens
           state.addThinkingTokens(event.sessionKey, Math.round(event.text.length / 4));
         }
@@ -823,6 +831,104 @@ export const usePanelStore = create<PanelState>((set, get) => {
         }),
       })),
 
+    // ── Regen ─────────────────────────────────────────
+
+    regenLastMessage: async (index) => {
+      const panel = get().panels[index];
+      if (!panel?.sessionKey) return;
+      // Find last user message
+      const msgs = panel.messages;
+      let lastUserIdx = -1;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].role === "user") { lastUserIdx = i; break; }
+      }
+      if (lastUserIdx < 0) return;
+      const userMsg = msgs[lastUserIdx];
+      // Extract plain text from HTML content
+      const div = document.createElement("div");
+      div.innerHTML = userMsg.content;
+      const plain = (div.textContent || div.innerText || userMsg.content).trim();
+      if (!plain) return;
+      // Trim messages to just before the last user message (includes the user msg)
+      const trimmed = msgs.slice(0, lastUserIdx + 1);
+      set((s) => ({
+        panels: s.panels.map((p, i) =>
+          i === index ? { ...p, messages: trimmed, streaming: true } : p
+        ),
+      }));
+      try {
+        await api.sendMessage(panel.sessionKey, plain);
+      } catch (e: any) {
+        useToastStore.getState().addToast(e.message, "error");
+        set((s) => ({
+          panels: s.panels.map((p, i) =>
+            i === index ? { ...p, streaming: false } : p
+          ),
+        }));
+      }
+    },
+
+    // ── Live thinking (progressive streaming thinking blocks) ──
+
+    upsertLiveThinking: (key, thinkingContent) =>
+      set((s) => {
+        const panel = s.panels.find((p) => p.sessionKey === key);
+        if (!panel) return s;
+        const msgs = [...panel.messages];
+        // Search for the live thinking marker in the last few messages
+        let existingIdx = -1;
+        for (let i = msgs.length - 1; i >= Math.max(0, msgs.length - 3); i--) {
+          if (msgs[i].content.includes('data-live-thinking="true"')) {
+            existingIdx = i;
+            break;
+          }
+        }
+        if (existingIdx >= 0) {
+          // Update existing live thinking block
+          msgs[existingIdx] = {
+            ...msgs[existingIdx],
+            content: renderLiveThinking({ content: thinkingContent, streaming: true }),
+          };
+        } else {
+          // Create new live thinking block
+          msgs.push({
+            role: "assistant",
+            content: renderLiveThinking({ content: thinkingContent, streaming: true }),
+            timestamp: new Date().toISOString(),
+          });
+        }
+        return {
+          panels: s.panels.map((p) =>
+            p.sessionKey === key ? { ...p, messages: msgs, thinkingContent: p.thinkingContent + thinkingContent } : p
+          ),
+        };
+      }),
+
+    closeLiveThinking: (key) =>
+      set((s) => ({
+        panels: s.panels.map((p) => {
+          if (p.sessionKey !== key) return p;
+          const msgs = [...p.messages];
+          // Convert live thinking to static foldable block, but only if we have content
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].content.includes('data-live-thinking="true"')) {
+              const content = p.thinkingContent;
+              if (content) {
+                msgs[i] = {
+                  ...msgs[i],
+                  content: renderLiveThinking({ content, streaming: false }),
+                };
+              } else {
+                // No thinking content — remove the placeholder
+                msgs.splice(i, 1);
+              }
+              break;
+            }
+          }
+          return { ...p, messages: msgs, thinkingContent: "" };
+        }),
+      })),
+
     // ── Pinning ─────────────────────────────────────────
 
     pinMessage: (panelIdx, msgIdx) =>
@@ -846,6 +952,27 @@ export const usePanelStore = create<PanelState>((set, get) => {
 });
 
 // ── Sub-agent card renderers ─────────────────────────────
+
+// ── Live thinking block renderer (streaming vs static) ──────
+
+function renderLiveThinking({ content, streaming }: { content: string; streaming: boolean }): string {
+  if (streaming) {
+    return `<details class="thinking-block my-1" open data-live-thinking="true">
+      <summary class="text-[10px] text-[var(--color-t3)] cursor-pointer hover:text-[var(--color-t2)] select-none flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse"></span>
+        💭 Thinking…
+      </summary>
+      <div class="mt-1 px-2 py-1.5 rounded border border-[var(--color-bd)] bg-[var(--color-bg2)] text-[11px] text-[var(--color-t2)] leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}<span class="streaming-cursor">▊</span></div>
+    </details>`;
+  }
+  // Static (closed after message_start)
+  return `<details class="thinking-block my-1" data-live-thinking="false">
+    <summary class="text-[10px] text-[var(--color-t3)] cursor-pointer hover:text-[var(--color-t2)] select-none">
+      💭 Thinking
+    </summary>
+    <div class="mt-1 px-2 py-1.5 rounded border border-[var(--color-bd)] bg-[var(--color-bg2)] text-[11px] text-[var(--color-t2)] italic whitespace-pre-wrap">${escapeHtml(content)}</div>
+  </details>`;
+}
 
 function renderSubAgentStart(id: string, task: string): string {
   return `<div class="sub-agent-card my-1.5 px-2.5 py-2 rounded-lg border border-[var(--color-accent)]/30 bg-[rgba(59,130,246,0.06)]" data-sub-agent="${escapeHtml(id)}" data-task="${escapeHtml(task)}">

@@ -1,13 +1,21 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Search, Star, Clock, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, Star, Clock, ChevronDown, ChevronRight, Zap } from "lucide-react";
 import type { Model } from "../../lib/api";
 import type { RecentModelEntry } from "../../stores/modelStore";
+import { useModelStore } from "../../stores/modelStore";
 
 // Models with "Recommended" badge
 const RECOMMENDED_MODELS: Record<string, true> = {
   "claude-sonnet-4": true,
+  "claude-opus-4": true,
+  "claude-haiku-4": true,
   "gpt-4o": true,
+  "gpt-4.1": true,
   "gemini-2.5-pro": true,
+  "gemini-2.5-flash": true,
+  "deepseek-chat": true,
+  "grok-4": true,
+  "llama-4": true,
 };
 
 interface Props {
@@ -91,9 +99,16 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
     });
   };
 
+  const { defaultProvider, defaultModel } = useModelStore();
+  const defaultModelObj = models.find(m => m.providerId === defaultProvider && m.modelId === defaultModel);
   const currentDisplay = currentModel
     ? models.find((m) => m.providerId === currentModel.provider && m.modelId === currentModel.modelId)?.displayName || `${currentModel.provider}/${currentModel.modelId}`
-    : "auto";
+    : defaultModelObj?.displayName || defaultModel || "pi default";
+  const isDefaultSelected = !currentModel && !!defaultModelObj;
+  const isDefaultActive = (model: Model) =>
+    !!defaultModelObj &&
+    model.providerId === defaultProvider &&
+    model.modelId === defaultModel;
 
   return (
     <div className="relative flex-shrink-0" ref={containerRef}>
@@ -101,8 +116,11 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1 bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-1.5 py-0.5 text-[9px] font-sans cursor-pointer max-w-[130px] outline-none hover:border-[var(--color-bdl)] transition-colors"
-        title={currentDisplay}
+        title={currentModel ? currentDisplay : `Default: ${currentDisplay}`}
       >
+        {isDefaultSelected && (
+          <Zap size={8} className="text-[var(--color-accent)] flex-shrink-0" />
+        )}
         <span className="truncate">{currentDisplay}</span>
         <ChevronDown size={9} className={`flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -141,20 +159,24 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
                       currentModel?.modelId === m.modelId
                     }
                     onSelect={() => handleSelect(m.providerId, m.modelId)}
+                    isDefault={isDefaultActive(m)}
                   />
                 ))}
               </div>
             )}
 
-            {/* Auto option */}
-            {!search && (
-              <div
-                onClick={() => {
-                  setOpen(false);
-                }}
-                className="px-3 py-2 cursor-pointer hover:bg-[var(--color-bgh)] transition-colors border-b border-[var(--color-bd)]"
-              >
-                <span className="text-[11px] text-[var(--color-t2)]">auto (default)</span>
+            {/* Default indicator section (non-interactive, info only) */}
+            {!search && defaultModelObj && (
+              <div className="px-3 py-1.5 border-b border-[var(--color-bd)] flex items-center gap-2">
+                <span className="text-[9px] text-[var(--color-t3)]">Default:</span>
+                <span className="text-[10px] font-medium text-[var(--color-t2)]">{defaultModelObj.displayName}</span>
+                <span className="text-[8px] text-[var(--color-t3)] bg-[var(--color-bg3)] px-1 rounded">{defaultModelObj.providerId}</span>
+                <span
+                  onClick={() => onSelect(defaultProvider, defaultModel)}
+                  className="ml-auto text-[9px] text-[var(--color-accent)] hover:underline cursor-pointer"
+                >
+                  Use default
+                </span>
               </div>
             )}
 
@@ -170,6 +192,7 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
                       currentModel?.modelId === m.modelId
                     }
                     onSelect={() => handleSelect(m.providerId, m.modelId)}
+                    isDefault={isDefaultActive(m)}
                   />
                 ))
               : providers
@@ -201,6 +224,7 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
                                 currentModel?.modelId === m.modelId
                               }
                               onSelect={() => handleSelect(m.providerId, m.modelId)}
+                              isDefault={isDefaultActive(m)}
                             />
                           ))}
                       </div>
@@ -217,10 +241,12 @@ function ModelRow({
   model,
   selected,
   onSelect,
+  isDefault,
 }: {
   model: Model;
   selected: boolean;
   onSelect: () => void;
+  isDefault?: boolean;
 }) {
   const isRec = RECOMMENDED_MODELS[model.modelId] ?? false;
 
@@ -242,7 +268,13 @@ function ModelRow({
           >
             {model.displayName}
           </span>
-          {isRec && (
+          {isDefault && (
+            <span className="flex items-center gap-0.5 text-[8px] text-[var(--color-accent)] bg-[var(--color-accent)]/10 px-1 rounded flex-shrink-0">
+              <Zap size={7} />
+              Default
+            </span>
+          )}
+          {isRec && !isDefault && (
             <span className="flex items-center gap-0.5 text-[8px] text-[var(--color-warning)] bg-[var(--color-warning)]/10 px-1 rounded flex-shrink-0">
               <Star size={7} />
               Rec

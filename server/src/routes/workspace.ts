@@ -21,12 +21,33 @@ function sendError(res: any, e: any, status = 500) {
   res.status(status).json({ error: e.message || "Internal server error", code });
 }
 
+// ── Path normalize ──────────────────────────────────────
+
+function normalizePath(p: string): string {
+  // Strip Windows extended-length prefix: \\?\C:\... → C:\...
+  let clean = p.replace(/^\\\\\?\\/, "");
+  // Normalize backslashes to forward (Node handles both, but consistency helps)
+  // Keep backslashes on Windows — fs handles them fine
+  return clean;
+}
+
 // List sessions in a workspace
 router.get("/workspace/:enc", async (req, res) => {
   try {
-    const path = Buffer.from(req.params.enc, "base64url").toString("utf-8");
+    const path = normalizePath(Buffer.from(req.params.enc, "base64url").toString("utf-8"));
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
     const infos = await SessionManager.list(path);
-    const ss = infos.map((i: any) => ({
+    
+    // Sort by modified desc (newest first)
+    infos.sort((a: any, b: any) => {
+      const da = new Date(a.modified || 0).getTime();
+      const db = new Date(b.modified || 0).getTime();
+      return db - da;
+    });
+
+    const sliced = limit ? infos.slice(offset, offset + limit) : infos;
+    const ss = sliced.map((i: any) => ({
       id: i.id,
       title: i.name || firstMsg(i.firstMessage) || "(untitled)",
       updatedAt: i.modified || new Date().toISOString(),
@@ -35,7 +56,7 @@ router.get("/workspace/:enc", async (req, res) => {
 
     store.addWorkspace(path, name);
 
-    res.json({ path, name, sessions: ss });
+    res.json({ path, name, sessions: ss, total: infos.length });
   } catch (e: any) {
     sendError(res, e);
   }
@@ -49,7 +70,7 @@ router.get("/workspaces", (_req, res) => {
 // Remove workspace
 router.delete("/workspace/:enc", (req, res) => {
   try {
-    const path = Buffer.from(req.params.enc, "base64url").toString("utf-8");
+    const path = normalizePath(Buffer.from(req.params.enc, "base64url").toString("utf-8"));
     store.removeWorkspace(path);
     res.json({ ok: true });
   } catch (e: any) {
@@ -178,6 +199,35 @@ router.delete("/session/:key", async (req, res) => {
   try {
     const key = decodeURIComponent(req.params.key);
     await sessions.close(key);
+    res.json({ ok: true });
+  } catch (e: any) {
+    sendError(res, e);
+  }
+});
+
+// Permanently delete session from disk
+router.delete("/session/:key/permanent", async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key);
+    const entry = sessions.get(key);
+    if (entry) {
+      await sessions.close(key);
+    }
+    // Delete from SessionManager via list + delete
+    const parts = key.split("::");
+    const workspacePath = parts.slice(0, -1).join("::");
+    const sessionId = parts[parts.length - 1];
+    const infos = await SessionManager.list(workspacePath);
+    const info = infos.find((i: any) => i.id === sessionId);
+    if (info && info.path) {
+      // SessionManager may have a delete; try fs removal if not
+      try {
+        await (SessionManager as any)['delete']?.(info.path);
+      } catch {
+        // Fallback: remove from store only
+      }
+    }
+    store.removeSession(key);
     res.json({ ok: true });
   } catch (e: any) {
     sendError(res, e);

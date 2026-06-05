@@ -4,8 +4,8 @@ export type ThemeMode = "dark" | "light" | "system" | "solarized-dark" | "solari
 export type Density = "compact" | "normal" | "comfortable";
 export type AccentColor = "purple" | "blue" | "green" | "orange" | "pink" | "teal" | "red" | "amber" | "cyan";
 export type CodeTheme = "dark" | "light" | "monokai" | "dracula" | "nord" | "github";
-export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "cascadia-code";
-export type UIFontFamily = "system" | "inter" | "geist" | "roboto" | "open-sans" | "lato" | "poppins" | "dm-sans" | "system-sans";
+export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "roboto-mono";
+export type UIFontFamily = "system" | "inter" | "nunito" | "roboto" | "open-sans" | "lato" | "poppins" | "dm-sans" | "system-sans";
 
 // ── Font loading (Google Fonts CDN) ─────────────────────
 
@@ -14,9 +14,9 @@ const GOOGLE_FONTS: Record<string, string> = {
   "fira-code": "Fira+Code:wght@400;500;600;700",
   "source-code-pro": "Source+Code+Pro:wght@400;500;600;700",
   "ibm-plex-mono": "IBM+Plex+Mono:wght@400;500;600;700",
-  // cascadia-code not on Google Fonts — falls back to system mono
+  "roboto-mono": "Roboto+Mono:wght@400;500;600;700",
   inter: "Inter:wght@400;500;600;700",
-  // geist not on Google Fonts — falls back to system sans
+  nunito: "Nunito:wght@400;500;600;700",
   roboto: "Roboto:wght@400;500;700",
   "open-sans": "Open+Sans:wght@400;500;600;700",
   lato: "Lato:wght@400;700",
@@ -44,13 +44,13 @@ export const FONT_MAP: Record<FontFamily, { name: string; css: string }> = {
   "fira-code": { name: "Fira Code", css: '"Fira Code", ui-monospace, monospace' },
   "source-code-pro": { name: "Source Code Pro", css: '"Source Code Pro", ui-monospace, monospace' },
   "ibm-plex-mono": { name: "IBM Plex Mono", css: '"IBM Plex Mono", ui-monospace, monospace' },
-  "cascadia-code": { name: "Cascadia Code", css: '"Cascadia Code", ui-monospace, monospace' },
+  "roboto-mono": { name: "Roboto Mono", css: '"Roboto Mono", ui-monospace, monospace' },
 };
 
 export const UI_FONT_MAP: Record<UIFontFamily, { name: string; css: string }> = {
   system: { name: "System", css: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
   inter: { name: "Inter", css: '"Inter", system-ui, -apple-system, sans-serif' },
-  geist: { name: "Geist", css: '"Geist", system-ui, -apple-system, sans-serif' },
+  nunito: { name: "Nunito", css: '"Nunito", system-ui, -apple-system, sans-serif' },
   roboto: { name: "Roboto", css: '"Roboto", system-ui, -apple-system, sans-serif' },
   "open-sans": { name: "Open Sans", css: '"Open Sans", system-ui, -apple-system, sans-serif' },
   lato: { name: "Lato", css: '"Lato", system-ui, -apple-system, sans-serif' },

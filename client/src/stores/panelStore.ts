@@ -871,7 +871,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
 
     // ── Stall detection ─────────────────────────────────
 
-    startStallTimer: (key) => {
+    startStallTimer: (key: string) => {
       const panel = get().panels.find((p) => p.sessionKey === key);
       if (!panel || panel.stallTimer) return;
       const timer = setTimeout(() => {
@@ -903,7 +903,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
       }));
     },
 
-    resetStallTimer: (key) => {
+    resetStallTimer: (key: string) => {
       const panel = get().panels.find((p) => p.sessionKey === key);
       if (!panel) return;
       if (panel.stallTimer) clearTimeout(panel.stallTimer);
@@ -936,10 +936,10 @@ export const usePanelStore = create<PanelState>((set, get) => {
       }));
     },
 
-    clearStallTimer: (key) => {
+    clearStallTimer: (key: string) => {
       const panel = get().panels.find((p) => p.sessionKey === key);
       if (!panel?.stallTimer) return;
-      clearTimeout(panel.stallTimer);
+      clearTimeout(panel.stallTimer as ReturnType<typeof setTimeout>);
       set((s) => ({
         panels: s.panels.map((p) =>
           p.sessionKey === key ? { ...p, stallTimer: null } : p

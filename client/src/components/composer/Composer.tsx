@@ -496,7 +496,12 @@ if (typeof window !== "undefined") {
     if ((e.ctrlKey || e.metaKey) && e.key === "k") {
       e.preventDefault();
       const textareas = document.querySelectorAll("textarea");
-      for (const ta of textareas) {
+      Array.from(textareas).forEach((ta) => {
+        if (!(ta as HTMLTextAreaElement).disabled) {
+          (ta as HTMLTextAreaElement).focus();
+          return;
+        }
+      });
         if (!(ta as HTMLTextAreaElement).disabled) {
           (ta as HTMLTextAreaElement).focus();
           break;

@@ -301,6 +301,14 @@ body,
   font-size: 13px;
 }
 
+/* Override Tailwind font utilities to use dynamic CSS variables */
+.font-sans {
+  font-family: var(--font-sans) !important;
+}
+.font-mono {
+  font-family: var(--font-mono) !important;
+}
+
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;

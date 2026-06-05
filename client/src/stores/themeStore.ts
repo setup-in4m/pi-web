@@ -172,7 +172,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       set({ fontFamily });
       const s = get();
       loadGoogleFont(fontFamily);
-      const font = FONT_MAP[fontFamily];
+      const font = FONT_MAP[fontFamily] ?? FONT_MAP.system;
       document.documentElement.style.setProperty("--font-mono", font.css);
       document.documentElement.setAttribute("data-font-family", fontFamily);
       applyCodeTheme(s.codeTheme);
@@ -183,7 +183,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       set({ uiFontFamily });
       const s = get();
       loadGoogleFont(uiFontFamily);
-      const font = UI_FONT_MAP[uiFontFamily];
+      const font = UI_FONT_MAP[uiFontFamily] ?? UI_FONT_MAP.system;
       document.documentElement.style.setProperty("--font-sans", font.css);
       applyCodeTheme(s.codeTheme);
       persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale: s.fontScale, fontFamily: s.fontFamily, uiFontFamily, codeTheme: s.codeTheme });

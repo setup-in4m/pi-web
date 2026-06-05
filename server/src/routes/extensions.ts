@@ -6,6 +6,7 @@ import { agentDir } from "../config.js";
 const router = Router();
 
 const EXTENSIONS_DIR = join(agentDir, "extensions");
+const GIT_DIR = join(agentDir, "git");
 
 function ensureDir() {
   if (!existsSync(EXTENSIONS_DIR)) {
@@ -24,56 +25,122 @@ interface ExtensionInfo {
 function listLocalExtensions(): ExtensionInfo[] {
   ensureDir();
   const result: ExtensionInfo[] = [];
+
+  // Scan installed extensions directory
+  scanExtensionsDir(EXTENSIONS_DIR, result);
+
+  // Scan git-cloned extensions (pi installs via git here)
+  if (existsSync(GIT_DIR)) {
+    try {
+      scanGitDir(GIT_DIR, "", result);
+    } catch (e: any) {
+      console.error(`[extensions] Failed to scan git dir ${GIT_DIR}:`, e.message);
+    }
+  }
+
+  return result;
+}
+
+function scanGitDir(dir: string, prefix: string, result: ExtensionInfo[]) {
   try {
-    const entries = readdirSync(EXTENSIONS_DIR, { withFileTypes: true });
+    const entries = readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
+      const fullPath = join(dir, entry.name);
+      const displayPrefix = prefix ? `${prefix}/${entry.name}` : entry.name;
 
-      // Try package.json first, then config.json
-      let manifestPath = join(EXTENSIONS_DIR, entry.name, "package.json");
-      let altPath = join(EXTENSIONS_DIR, entry.name, "config.json");
+      // Check if this directory has extensions/ subdir
+      const extSubdir = join(fullPath, "extensions");
+      if (existsSync(extSubdir)) {
+        scanExtensionsDir(extSubdir, result, displayPrefix);
+      }
 
-      if (existsSync(manifestPath)) {
-        try {
-          const pkg = JSON.parse(readFileSync(manifestPath, "utf-8"));
-          result.push({
-            id: entry.name,
-            name: pkg.displayName || pkg.name || entry.name,
-            version: pkg.version || "0.0.0",
-            enabled: pkg.enabled !== false,
-            description: pkg.description,
-          });
-        } catch (e: any) {
-          console.error(`[extensions] Failed to parse ${manifestPath}:`, e.message);
-        }
-      } else if (existsSync(altPath)) {
-        try {
-          const cfg = JSON.parse(readFileSync(altPath, "utf-8"));
-          result.push({
-            id: entry.name,
-            name: cfg.displayName || cfg.name || entry.name,
-            version: cfg.version || "0.0.0",
-            enabled: cfg.enabled !== false,
-            description: cfg.description,
-          });
-        } catch (e: any) {
-          console.error(`[extensions] Failed to parse ${altPath}:`, e.message);
-        }
-      } else {
-        // Extension without manifest — list it anyway
+      // Check if this directory IS an extension (has package.json or config.json)
+      const repoPkg = join(fullPath, "package.json");
+      const repoCfg = join(fullPath, "config.json");
+      if (existsSync(repoPkg) || existsSync(repoCfg)) {
+        readExtensionManifest(fullPath, entry.name, displayPrefix, result);
+      }
+
+      // Recurse deeper (for github.com/org/repo structures)
+      // Stop at 4 levels to avoid infinite recursion
+      const depth = displayPrefix.split("/").length;
+      if (depth < 4) {
+        scanGitDir(fullPath, displayPrefix, result);
+      }
+    }
+  } catch (e: any) {
+    console.error(`[extensions] Failed to scan ${dir}:`, e.message);
+  }
+}
+
+function scanExtensionsDir(dir: string, result: ExtensionInfo[], prefix = "") {
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      const displayId = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+      if (entry.isDirectory()) {
+        // Directory-based extension (has its own manifest)
+        readExtensionManifest(fullPath, entry.name, displayId, result);
+      } else if (entry.isFile() && (entry.name.endsWith(".ts") || entry.name.endsWith(".js") || entry.name.endsWith(".mjs"))) {
+        // Single-file extension (pi SDK format)
+        const extName = entry.name.replace(/\.(ts|js|mjs)$/, "");
         result.push({
-          id: entry.name,
-          name: entry.name,
+          id: prefix ? `${prefix}/${extName}` : extName,
+          name: extName,
           version: "0.0.0",
           enabled: true,
-          description: "No manifest",
+          description: `File extension`,
         });
       }
     }
   } catch (e: any) {
-    console.error(`[extensions] Failed to read ${EXTENSIONS_DIR}:`, e.message);
+    console.error(`[extensions] Failed to read ${dir}:`, e.message);
   }
-  return result;
+}
+
+function readExtensionManifest(fullPath: string, name: string, displayId: string, result: ExtensionInfo[]) {
+  const manifestPath = join(fullPath, "package.json");
+  const configPath = join(fullPath, "config.json");
+
+  if (existsSync(manifestPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(manifestPath, "utf-8"));
+      result.push({
+        id: displayId,
+        name: pkg.displayName || pkg.name || name,
+        version: pkg.version || "0.0.0",
+        enabled: pkg.enabled !== false,
+        description: pkg.description,
+      });
+    } catch (e: any) {
+      console.error(`[extensions] Failed to parse ${manifestPath}:`, e.message);
+    }
+  } else if (existsSync(configPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
+      result.push({
+        id: displayId,
+        name: cfg.displayName || cfg.name || name,
+        version: cfg.version || "0.0.0",
+        enabled: cfg.enabled !== false,
+        description: cfg.description,
+      });
+    } catch (e: any) {
+      console.error(`[extensions] Failed to parse ${configPath}:`, e.message);
+    }
+  } else {
+    // No manifest — list it anyway
+    result.push({
+      id: displayId,
+      name: name,
+      version: "0.0.0",
+      enabled: true,
+      description: "No manifest",
+    });
+  }
 }
 
 // List extensions

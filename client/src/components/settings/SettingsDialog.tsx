@@ -258,6 +258,10 @@ export function SettingsDialog({ open, onClose }: Props) {
                     { value: "dark" as ThemeMode, icon: Moon, label: "Dark" },
                     { value: "light" as ThemeMode, icon: Sun, label: "Light" },
                     { value: "system" as ThemeMode, icon: Monitor, label: "System" },
+                    { value: "solarized-dark" as ThemeMode, icon: Moon, label: "Solarized" },
+                    { value: "tokyo-night" as ThemeMode, icon: Moon, label: "Tokyo Night" },
+                    { value: "catppuccin" as ThemeMode, icon: Moon, label: "Catppuccin" },
+                    { value: "nord" as ThemeMode, icon: Moon, label: "Nord" },
                   ]).map((opt) => {
                     const Icon = opt.icon;
                     return (

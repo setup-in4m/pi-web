@@ -36,6 +36,62 @@
   --color-t3: #949ab0;
 }
 
+/* Solarized Dark */
+[data-theme="solarized-dark"] {
+  --color-bg: #002b36;
+  --color-bg2: #073642;
+  --color-bg3: #0a4150;
+  --color-bgh: #115566;
+  --color-bga: #186477;
+  --color-bd: #1a6b80;
+  --color-bdl: #268599;
+  --color-t1: #eee8d5;
+  --color-t2: #839496;
+  --color-t3: #586e75;
+}
+
+/* Tokyo Night */
+[data-theme="tokyo-night"] {
+  --color-bg: #1a1b26;
+  --color-bg2: #1f2335;
+  --color-bg3: #24283b;
+  --color-bgh: #2a2f45;
+  --color-bga: #363b54;
+  --color-bd: #3b4261;
+  --color-bdl: #4a5173;
+  --color-t1: #c0caf5;
+  --color-t2: #787c99;
+  --color-t3: #565a7a;
+}
+
+/* Catppuccin Mocha */
+[data-theme="catppuccin"] {
+  --color-bg: #1e1e2e;
+  --color-bg2: #242438;
+  --color-bg3: #2a2a3c;
+  --color-bgh: #333348;
+  --color-bga: #3c3c53;
+  --color-bd: #454559;
+  --color-bdl: #55556c;
+  --color-t1: #cdd6f4;
+  --color-t2: #7c7f93;
+  --color-t3: #585b70;
+}
+
+/* Nord */
+[data-theme="nord"] {
+  --color-bg: #2e3440;
+  --color-bg2: #353b49;
+  --color-bg3: #3b4252;
+  --color-bgh: #434c5e;
+  --color-bga: #4c566a;
+  --color-bd: #555f73;
+  --color-bdl: #616b80;
+  --color-t1: #d8dee9;
+  --color-t2: #81a1c1;
+  --color-t3: #616e88;
+}
+
 /* Light code theme overrides */
 [data-code-theme="light"] .code-block-wrapper pre {
   background: #f6f8fa !important;

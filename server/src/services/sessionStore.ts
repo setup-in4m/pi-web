@@ -7,6 +7,7 @@ import { readdirSync, existsSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const EXTENSIONS_DIR = join(agentDir, "extensions");
+const GIT_DIR = join(agentDir, "git");
 
 interface ExtensionInfo {
   id: string;
@@ -25,32 +26,50 @@ function ensureExtensionsDir() {
 function getEnabledExtensions(): string[] {
   ensureExtensionsDir();
   const enabled: string[] = [];
+
+  // Scan local extensions
+  scanExtDir(EXTENSIONS_DIR, enabled);
+
+  // Scan git-cloned extensions
+  if (existsSync(GIT_DIR)) {
+    scanGitForExtensions(GIT_DIR, enabled, 0);
+  }
+
+  return enabled;
+}
+
+function scanGitForExtensions(dir: string, enabled: string[], depth: number) {
+  if (depth >= 4) return;
   try {
-    const entries = readdirSync(EXTENSIONS_DIR, { withFileTypes: true });
+    const entries = readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const manifestPath = join(EXTENSIONS_DIR, entry.name, "package.json");
-      const configPath = join(EXTENSIONS_DIR, entry.name, "config.json");
-      let isEnabled = true;
-      if (existsSync(manifestPath)) {
-        try {
-          const pkg = JSON.parse(readFileSync(manifestPath, "utf-8"));
-          if (pkg.enabled === false) isEnabled = false;
-        } catch { /* skip broken */ }
-      } else if (existsSync(configPath)) {
-        try {
-          const cfg = JSON.parse(readFileSync(configPath, "utf-8"));
-          if (cfg.enabled === false) isEnabled = false;
-        } catch { /* skip broken */ }
-      }
-      if (isEnabled) {
-        enabled.push(join(EXTENSIONS_DIR, entry.name));
+      const fullPath = join(dir, entry.name);
+      const extSubdir = join(fullPath, "extensions");
+      if (existsSync(extSubdir)) scanExtDir(extSubdir, enabled);
+      if (isExtensionDir(fullPath)) enabled.push(fullPath);
+      scanGitForExtensions(fullPath, enabled, depth + 1);
+    }
+  } catch { /* skip */ }
+}
+
+function scanExtDir(dir: string, enabled: string[]) {
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (isExtensionDir(fullPath)) enabled.push(fullPath);
+      } else if (entry.isFile() && (entry.name.endsWith(".ts") || entry.name.endsWith(".js") || entry.name.endsWith(".mjs"))) {
+        // Single-file extension — include the directory containing it
+        if (!enabled.includes(dir)) enabled.push(dir);
       }
     }
-  } catch {
-    // directory missing or unreadable
-  }
-  return enabled;
+  } catch { /* skip */ }
+}
+
+function isExtensionDir(dir: string): boolean {
+  return existsSync(join(dir, "package.json")) || existsSync(join(dir, "config.json"));
 }
 
 function buildSessionConfig(overrides: Record<string, unknown> = {}) {

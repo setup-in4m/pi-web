@@ -1,11 +1,11 @@
 import { create } from "zustand";
 
-export type ThemeMode = "dark" | "light" | "system";
+export type ThemeMode = "dark" | "light" | "system" | "solarized-dark" | "tokyo-night" | "catppuccin" | "nord";
 export type Density = "compact" | "normal" | "comfortable";
 export type AccentColor = "purple" | "blue" | "green" | "orange" | "pink" | "teal" | "red" | "amber" | "cyan";
 export type CodeTheme = "dark" | "light" | "monokai" | "dracula" | "nord" | "github";
 export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "cascadia-code";
-export type UIFontFamily = "system" | "inter" | "geist" | "system-sans";
+export type UIFontFamily = "system" | "inter" | "geist" | "roboto" | "open-sans" | "lato" | "poppins" | "dm-sans" | "system-sans";
 
 export const FONT_MAP: Record<FontFamily, { name: string; css: string }> = {
   system: { name: "System", css: "JetBrains Mono, Fira Code, monospace" },
@@ -20,6 +20,11 @@ export const UI_FONT_MAP: Record<UIFontFamily, { name: string; css: string }> = 
   system: { name: "System", css: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
   inter: { name: "Inter", css: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' },
   geist: { name: "Geist", css: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif' },
+  roboto: { name: "Roboto", css: '"Roboto", -apple-system, BlinkMacSystemFont, sans-serif' },
+  "open-sans": { name: "Open Sans", css: '"Open Sans", -apple-system, BlinkMacSystemFont, sans-serif' },
+  lato: { name: "Lato", css: '"Lato", -apple-system, BlinkMacSystemFont, sans-serif' },
+  poppins: { name: "Poppins", css: '"Poppins", -apple-system, BlinkMacSystemFont, sans-serif' },
+  "dm-sans": { name: "DM Sans", css: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif' },
   "system-sans": { name: "System Sans", css: 'system-ui, -apple-system, sans-serif' },
 };
 
@@ -151,9 +156,10 @@ export const useThemeStore = create<ThemeState>((set, get) => {
 
 function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, fontScale: number, fontFamily: FontFamily, uiFontFamily: UIFontFamily, codeTheme: CodeTheme) {
   const acc = ACCENT_MAP[accent];
-  const resolved = mode === "system"
-    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-    : mode;
+  let resolved = mode;
+  if (mode === "system") {
+    resolved = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
 
   document.documentElement.setAttribute("data-theme", resolved);
   document.documentElement.setAttribute("data-density", density);

@@ -55,7 +55,7 @@ export function TabBar() {
   const startRename = (e: React.MouseEvent, idx: number, panel: typeof panels[0]) => {
     e.stopPropagation();
     setEditingIndex(idx);
-    setEditDraft(panel.title || "");
+    setEditDraft(getTabLabel(panel));
   };
 
   const commitRename = (idx: number) => {

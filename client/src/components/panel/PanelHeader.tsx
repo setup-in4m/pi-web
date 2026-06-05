@@ -28,10 +28,10 @@ export function PanelHeader({ panel, panelIndex }: Props) {
   const name = panel.title || (panel.workspacePath ? panel.workspacePath.split(/[/\\]/).pop() : "New panel");
 
   const startRename = useCallback(() => {
-    setTitleDraft(panel.title || "");
+    setTitleDraft(name || "");
     setEditingTitle(true);
     setTimeout(() => titleInputRef.current?.select(), 10);
-  }, [panel.title]);
+  }, [name]);
 
   const commitRename = useCallback(() => {
     setEditingTitle(false);

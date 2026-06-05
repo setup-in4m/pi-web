@@ -411,8 +411,6 @@ pre[class*="language-"],
 /* Allotment splitter theming */
 .split-view-container {
   background: var(--color-bd) !important;
-  --separator-border: var(--color-bd);
-  --focus-border: var(--color-accent);
 }
 .split-view-view {
   background: var(--color-bg) !important;
@@ -421,16 +419,15 @@ pre[class*="language-"],
   background: var(--color-bd) !important;
   transition: background 0.15s;
 }
-.sash-container .sash::before {
-  background: transparent !important;
-}
 .sash-container .sash:hover,
 .sash-container .sash.active {
   background: var(--color-accent) !important;
 }
-.sash-container .sash:hover::before,
-.sash-container .sash.active::before {
-  background: var(--color-accent) !important;
+
+/* Override Allotment's built-in separator border and focus colors */
+:root {
+  --separator-border: var(--color-bd);
+  --focus-border: var(--color-accent);
 }
 
 /* Reduced motion */

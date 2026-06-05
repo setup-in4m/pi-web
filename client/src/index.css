@@ -459,7 +459,7 @@ pre[class*="language-"],
 /* Active panel border — applied to the Allotment pane itself so it renders above the sash */
 .split-view-view:has([data-panel-active]) {
   outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
+  outline-offset: 0;
 }
 
 /* Kill Allotment's built-in hover line + delayed animations */

@@ -10,9 +10,10 @@ import * as api from "../../lib/api";
 
 interface Props {
   panel: PanelData;
+  panelIndex?: number;
 }
 
-export function ChatView({ panel }: Props) {
+export function ChatView({ panel, panelIndex }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -296,7 +297,7 @@ export function ChatView({ panel }: Props) {
               if (!msg) return null;
               return (
                 <div key={idx} className="relative group/pinned mb-1">
-                  <MessageBubble message={msg} />
+                  <MessageBubble message={msg} panelIndex={panelIndex} />
                   <button
                     onClick={() => {
                       const panelIdx = panels.indexOf(panel);
@@ -373,6 +374,7 @@ export function ChatView({ panel }: Props) {
                       streaming={isStreaming}
                       showRegen={isLastAssistant}
                       onRegen={isLastAssistant ? handleRegenLast : undefined}
+                      panelIndex={panelIndex}
                     />
                   )}
 

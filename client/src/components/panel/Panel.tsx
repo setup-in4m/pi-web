@@ -18,7 +18,7 @@ export function Panel({ panel, isActive, panelIndex }: Props) {
       className={`flex flex-col h-full bg-[var(--color-bg)] overflow-hidden min-w-0 min-h-0`}
     >
       <PanelHeader panel={panel} panelIndex={panelIndex} />
-      <ChatView panel={panel} />
+      <ChatView panel={panel} panelIndex={panelIndex} />
       <Composer panelIndex={panelIndex} disabled={!hasWorkspace || panel.streaming} />
     </div>
   );

@@ -22,6 +22,8 @@ export interface PanelData {
   thinkingTokens: number;           // estimated thinking tokens
   usage: UsageInfo | null;
   pinnedIndices: number[];          // indices of pinned messages
+  stallTimer?: ReturnType<typeof setTimeout> | null;
+  stallNotified?: boolean;
 }
 
 interface PanelSlice {
@@ -76,6 +78,8 @@ interface PanelState extends PanelSlice {
 
   // Regen
   regenLastMessage: (index: number) => Promise<void>;
+
+  // Stall detection
 
   // Live thinking (streaming)
   upsertLiveThinking: (key: string, thinkingContent: string) => void;
@@ -143,11 +147,8 @@ export const usePanelStore = create<PanelState>((set, get) => {
 
     switch (event.eventType) {
       case "message_start":
-        // Close live thinking block (convert from streaming to static foldable)
         state.closeLiveThinking(event.sessionKey);
-        // Reset streaming token counter at start of new message
         state.setStreamingTokens(event.sessionKey, 0);
-        // Reset thinking token counter
         state.resetThinkingTokens(event.sessionKey);
         if (event.replace && event.text !== undefined) {
           state.replaceLastAssistant(event.sessionKey, event.text);
@@ -157,7 +158,6 @@ export const usePanelStore = create<PanelState>((set, get) => {
       case "text_delta":
         if (event.text) {
           state.updateLastAssistant(event.sessionKey, event.text);
-          // Estimate streaming tokens: characters / 4
           const estimatedTokens = Math.round(event.text.length / 4);
           state.setStreamingTokens(event.sessionKey, estimatedTokens);
         }
@@ -867,6 +867,84 @@ export const usePanelStore = create<PanelState>((set, get) => {
           ),
         }));
       }
+    },
+
+    // ── Stall detection ─────────────────────────────────
+
+    startStallTimer: (key) => {
+      const panel = get().panels.find((p) => p.sessionKey === key);
+      if (!panel || panel.stallTimer) return;
+      const timer = setTimeout(() => {
+        const p = get().panels.find((p2) => p2.sessionKey === key);
+        if (!p || !p.streaming || p.stallNotified) return;
+        set((s) => ({
+          panels: s.panels.map((p2) =>
+            p2.sessionKey === key
+              ? {
+                  ...p2,
+                  stallNotified: true,
+                  messages: [
+                    ...p2.messages,
+                    {
+                      role: "assistant" as const,
+                      content: `<div class="stall-warning" style="font-size:10px;color:var(--color-warning);font-style:italic;padding:4px 8px">Still working… the model may be processing a long response.</div>`,
+                      timestamp: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : p2
+          ),
+        }));
+      }, 60000);
+      set((s) => ({
+        panels: s.panels.map((p) =>
+          p.sessionKey === key ? { ...p, stallTimer: timer } : p
+        ),
+      }));
+    },
+
+    resetStallTimer: (key) => {
+      const panel = get().panels.find((p) => p.sessionKey === key);
+      if (!panel) return;
+      if (panel.stallTimer) clearTimeout(panel.stallTimer);
+      const timer = setTimeout(() => {
+        const p = get().panels.find((p2) => p2.sessionKey === key);
+        if (!p || !p.streaming || p.stallNotified) return;
+        set((s) => ({
+          panels: s.panels.map((p2) =>
+            p2.sessionKey === key
+              ? {
+                  ...p2,
+                  stallNotified: true,
+                  messages: [
+                    ...p2.messages,
+                    {
+                      role: "assistant" as const,
+                      content: `<div class="stall-warning" style="font-size:10px;color:var(--color-warning);font-style:italic;padding:4px 8px">Still working… the model may be processing a long response.</div>`,
+                      timestamp: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : p2
+          ),
+        }));
+      }, 60000);
+      set((s) => ({
+        panels: s.panels.map((p) =>
+          p.sessionKey === key ? { ...p, stallTimer: timer } : p
+        ),
+      }));
+    },
+
+    clearStallTimer: (key) => {
+      const panel = get().panels.find((p) => p.sessionKey === key);
+      if (!panel?.stallTimer) return;
+      clearTimeout(panel.stallTimer);
+      set((s) => ({
+        panels: s.panels.map((p) =>
+          p.sessionKey === key ? { ...p, stallTimer: null } : p
+        ),
+      }));
     },
 
     // ── Live thinking (progressive streaming thinking blocks) ──

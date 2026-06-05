@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, useEffect, useMemo } from "react";
-import { Send, Command, Zap, Trash2, List, HelpCircle, AtSign, Palette, FileType, Download } from "lucide-react";
+import { Send, Command, Zap, Trash2, List, HelpCircle, AtSign, Mic, Palette, Type, Download } from "lucide-react";
 import { usePanelStore } from "../../stores/panelStore";
 import { useModelStore } from "../../stores/modelStore";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -24,7 +24,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { id: "/clear", description: "Clear current chat messages", icon: <Trash2 size={13} /> },
   { id: "/models", description: "List available models", icon: <List size={13} /> },
   { id: "/theme", description: "List available UI themes", icon: <Palette size={13} /> },
-  { id: "/font", description: "List available font families", icon: <FileType size={13} /> },
+  { id: "/font", description: "List available font families", icon: <Type size={13} /> },
   { id: "/export", description: "Export this session as Markdown", icon: <Download size={13} /> },
   { id: "/help", description: "Show available commands and tips", icon: <HelpCircle size={13} /> },
 ];
@@ -496,17 +496,11 @@ if (typeof window !== "undefined") {
     if ((e.ctrlKey || e.metaKey) && e.key === "k") {
       e.preventDefault();
       const textareas = document.querySelectorAll("textarea");
-      Array.from(textareas).forEach((ta) => {
+      Array.from(textareas).forEach((ta: Element) => {
         if (!(ta as HTMLTextAreaElement).disabled) {
           (ta as HTMLTextAreaElement).focus();
-          return;
         }
       });
-        if (!(ta as HTMLTextAreaElement).disabled) {
-          (ta as HTMLTextAreaElement).focus();
-          break;
-        }
-      }
     }
   });
 }

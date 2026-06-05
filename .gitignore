@@ -8,3 +8,5 @@ _old/
 .env.local
 pi-web.db
 pi-web.db-journal
+nul
+qa-recordings/

@@ -93,7 +93,11 @@ export function TabBar() {
   };
 
   const onDragLeave = (e: React.DragEvent) => {
-    (e.currentTarget as HTMLElement).classList.remove("ring-1", "ring-[var(--color-accent)]");
+    const el = e.currentTarget as HTMLElement;
+    // Only remove highlight when leaving the whole tab, not entering a child
+    if (!el.contains(e.relatedTarget as Node)) {
+      el.classList.remove("ring-1", "ring-[var(--color-accent)]");
+    }
   };
 
   const onDrop = (e: React.DragEvent, toIdx: number) => {

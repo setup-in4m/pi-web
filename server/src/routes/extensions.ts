@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { readdirSync, existsSync, readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
+import { readdirSync, existsSync, readFileSync, writeFileSync, mkdirSync, cpSync, unlinkSync } from "node:fs";
 import { join, basename, dirname } from "node:path";
 import { agentDir } from "../config.js";
 import { SettingsManager, type PackageSource } from "@earendil-works/pi-coding-agent";
@@ -143,7 +143,10 @@ function listLocalExtensionDirs(): ExtensionInfo[] {
           result.push({ id: entry.name, name: cfg.displayName || cfg.name || entry.name, version: cfg.version || "0.0.0", enabled: cfg.enabled !== false, description: cfg.description });
         } catch { /* skip */ }
       } else {
-        result.push({ id: entry.name, name: entry.name, version: "0.0.0", enabled: true });
+        // No manifest — read enabled state from sidecar file
+        const sidecarPath = join(fullPath, ".pi-web-enabled");
+        const manualEnabled = !existsSync(sidecarPath);
+        result.push({ id: entry.name, name: entry.name, version: "0.0.0", enabled: manualEnabled });
       }
     }
   } catch { /* skip */ }
@@ -208,14 +211,31 @@ router.post("/extensions/:id/toggle", async (req, res) => {
     const { id } = req.params;
     const { enabled } = req.body;
 
-    // 1. Try local extension directory (package.json toggle)
+    // 1. Try local extension directory (package.json or config.json toggle)
     const extDir = join(EXTENSIONS_DIR, id);
     if (existsSync(extDir)) {
       const pkgPath = join(extDir, "package.json");
+      const cfgPath = join(extDir, "config.json");
       if (existsSync(pkgPath)) {
         const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
         pkg.enabled = enabled;
         writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), "utf-8");
+        return res.json({ ok: true, enabled });
+      }
+      if (existsSync(cfgPath)) {
+        const cfg = JSON.parse(readFileSync(cfgPath, "utf-8"));
+        cfg.enabled = enabled;
+        writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), "utf-8");
+        return res.json({ ok: true, enabled });
+      }
+      // Directory exists but no known manifest — toggle anyway via a sidecar file
+      const sidecarPath = join(extDir, ".pi-web-enabled");
+      if (enabled) {
+        if (existsSync(sidecarPath)) {
+          try { unlinkSync(sidecarPath); } catch {}
+        }
+      } else {
+        writeFileSync(sidecarPath, "disabled", "utf-8");
       }
       return res.json({ ok: true, enabled });
     }

@@ -9,7 +9,7 @@ import { openFolder } from "../../lib/tauri";
 import { isConnected } from "../../lib/ws";
 
 export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { workspaces, loading, addWorkspace, refreshWorkspace, usageCache } = useWorkspaceStore();
+  const { workspaces, loading, error, addWorkspace, refreshWorkspace, usageCache } = useWorkspaceStore();
   const { models } = useModelStore();
   const { panels, openExistingSession } = usePanelStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -122,9 +122,15 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
           <div className="p-4 text-center text-[var(--color-t3)] text-[10px]">Loading…</div>
         )}
 
-        {!loading && workspaces.length === 0 && (
+        {!loading && workspaces.length === 0 && !error && (
           <div className="p-4 text-center text-[var(--color-t3)] text-[10px]">
             No folders open.
+          </div>
+        )}
+
+        {error && (
+          <div className="mx-2 mb-2 p-2 bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/30 rounded text-[10px] text-[var(--color-danger)]">
+            {error}
           </div>
         )}
 

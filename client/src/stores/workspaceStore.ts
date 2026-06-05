@@ -22,7 +22,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   usageCache: {},
 
   loadWorkspaces: async () => {
-    set({ loading: true, error: null });
+    set({ loading: true });
     try {
       const { workspaces } = await api.fetchWorkspaces();
       const loaded: WorkspaceData[] = [];
@@ -34,7 +34,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
           // skip inaccessible workspaces
         }
       }
-      set({ workspaces: loaded, loading: false });
+      set({ workspaces: loaded, loading: false, error: null });
     } catch (e: any) {
       set({ error: e.message, loading: false });
     }
@@ -45,9 +45,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       const data = await api.fetchWorkspace(path);
       set((s) => ({
         workspaces: [data, ...s.workspaces.filter((w) => w.path !== path)],
+        error: null,
       }));
     } catch (e: any) {
       set({ error: e.message });
+      throw e;
     }
   },
 

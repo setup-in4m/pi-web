@@ -460,7 +460,10 @@ pre[class*="language-"],
 .split-view-view:has([data-panel-active]) {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
-  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+/* Rightmost / bottommost active panel: double the outer edge (clipped by viewport) */
+.split-view-view:last-child:has([data-panel-active]) {
+  box-shadow: inset -2px -2px 0 0 var(--color-accent);
 }
 
 /* Active panel: color the sash center line when adjacent */

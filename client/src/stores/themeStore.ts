@@ -7,24 +7,55 @@ export type CodeTheme = "dark" | "light" | "monokai" | "dracula" | "nord" | "git
 export type FontFamily = "system" | "jetbrains" | "fira-code" | "source-code-pro" | "ibm-plex-mono" | "cascadia-code";
 export type UIFontFamily = "system" | "inter" | "geist" | "roboto" | "open-sans" | "lato" | "poppins" | "dm-sans" | "system-sans";
 
+// ── Font loading (Google Fonts CDN) ─────────────────────
+
+const GOOGLE_FONTS: Record<string, string> = {
+  jetbrains: "JetBrains+Mono:wght@400;500;600;700",
+  "fira-code": "Fira+Code:wght@400;500;600;700",
+  "source-code-pro": "Source+Code+Pro:wght@400;500;600;700",
+  "ibm-plex-mono": "IBM+Plex+Mono:wght@400;500;600;700",
+  // cascadia-code not on Google Fonts — falls back to system mono
+  inter: "Inter:wght@400;500;600;700",
+  // geist not on Google Fonts — falls back to system sans
+  roboto: "Roboto:wght@400;500;700",
+  "open-sans": "Open+Sans:wght@400;500;600;700",
+  lato: "Lato:wght@400;700",
+  poppins: "Poppins:wght@400;500;600;700",
+  "dm-sans": "DM+Sans:wght@400;500;600;700",
+};
+
+function loadGoogleFont(fontKey: string) {
+  const family = GOOGLE_FONTS[fontKey];
+  if (!family) return; // not on Google Fonts, rely on system fallback
+  const id = `gf-${fontKey}`;
+  if (document.getElementById(id)) return; // already loaded
+  const link = document.createElement("link");
+  link.id = id;
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${family}&display=swap`;
+  document.head.appendChild(link);
+}
+
+// ── Font maps ───────────────────────────────────────────
+
 export const FONT_MAP: Record<FontFamily, { name: string; css: string }> = {
-  system: { name: "System", css: "JetBrains Mono, Fira Code, monospace" },
-  jetbrains: { name: "JetBrains Mono", css: '"JetBrains Mono", monospace' },
-  "fira-code": { name: "Fira Code", css: '"Fira Code", monospace' },
-  "source-code-pro": { name: "Source Code Pro", css: '"Source Code Pro", monospace' },
-  "ibm-plex-mono": { name: "IBM Plex Mono", css: '"IBM Plex Mono", monospace' },
-  "cascadia-code": { name: "Cascadia Code", css: '"Cascadia Code", monospace' },
+  system: { name: "System", css: 'ui-monospace, SFMono-Regular, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace' },
+  jetbrains: { name: "JetBrains Mono", css: '"JetBrains Mono", ui-monospace, monospace' },
+  "fira-code": { name: "Fira Code", css: '"Fira Code", ui-monospace, monospace' },
+  "source-code-pro": { name: "Source Code Pro", css: '"Source Code Pro", ui-monospace, monospace' },
+  "ibm-plex-mono": { name: "IBM Plex Mono", css: '"IBM Plex Mono", ui-monospace, monospace' },
+  "cascadia-code": { name: "Cascadia Code", css: '"Cascadia Code", ui-monospace, monospace' },
 };
 
 export const UI_FONT_MAP: Record<UIFontFamily, { name: string; css: string }> = {
-  system: { name: "System", css: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
-  inter: { name: "Inter", css: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' },
-  geist: { name: "Geist", css: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif' },
-  roboto: { name: "Roboto", css: '"Roboto", -apple-system, BlinkMacSystemFont, sans-serif' },
-  "open-sans": { name: "Open Sans", css: '"Open Sans", -apple-system, BlinkMacSystemFont, sans-serif' },
-  lato: { name: "Lato", css: '"Lato", -apple-system, BlinkMacSystemFont, sans-serif' },
-  poppins: { name: "Poppins", css: '"Poppins", -apple-system, BlinkMacSystemFont, sans-serif' },
-  "dm-sans": { name: "DM Sans", css: '"DM Sans", -apple-system, BlinkMacSystemFont, sans-serif' },
+  system: { name: "System", css: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+  inter: { name: "Inter", css: '"Inter", system-ui, -apple-system, sans-serif' },
+  geist: { name: "Geist", css: '"Geist", system-ui, -apple-system, sans-serif' },
+  roboto: { name: "Roboto", css: '"Roboto", system-ui, -apple-system, sans-serif' },
+  "open-sans": { name: "Open Sans", css: '"Open Sans", system-ui, -apple-system, sans-serif' },
+  lato: { name: "Lato", css: '"Lato", system-ui, -apple-system, sans-serif' },
+  poppins: { name: "Poppins", css: '"Poppins", system-ui, -apple-system, sans-serif' },
+  "dm-sans": { name: "DM Sans", css: '"DM Sans", system-ui, -apple-system, sans-serif' },
   "system-sans": { name: "System Sans", css: 'system-ui, -apple-system, sans-serif' },
 };
 
@@ -136,6 +167,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     setFontFamily: (fontFamily) => {
       set({ fontFamily });
       const s = get();
+      loadGoogleFont(fontFamily);
       const font = FONT_MAP[fontFamily];
       document.documentElement.style.setProperty("--font-mono", font.css);
       document.documentElement.setAttribute("data-font-family", fontFamily);
@@ -146,6 +178,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     setUIFontFamily: (uiFontFamily) => {
       set({ uiFontFamily });
       const s = get();
+      loadGoogleFont(uiFontFamily);
       const font = UI_FONT_MAP[uiFontFamily];
       document.documentElement.style.setProperty("--font-sans", font.css);
       applyCodeTheme(s.codeTheme);
@@ -173,11 +206,13 @@ function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, font
   document.documentElement.style.fontSize = `${13 * fontScale}px`;
 
   // Code font
+  loadGoogleFont(fontFamily);
   const font = FONT_MAP[fontFamily] ?? FONT_MAP.system;
   document.documentElement.style.setProperty("--font-mono", font.css);
   document.documentElement.setAttribute("data-font-family", fontFamily in FONT_MAP ? fontFamily : "system");
 
   // UI font
+  loadGoogleFont(uiFontFamily);
   const uiFont = UI_FONT_MAP[uiFontFamily] ?? UI_FONT_MAP.system;
   document.documentElement.style.setProperty("--font-sans", uiFont.css);
 

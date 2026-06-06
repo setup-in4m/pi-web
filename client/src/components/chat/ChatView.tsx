@@ -112,6 +112,15 @@ export function ChatView({ panel, panelIndex }: Props) {
     }
   }, [msgs.length, lastContentLen, isStreaming, virtualizer]);
 
+  // Scroll to bottom when loading finishes (existing session loaded)
+  useEffect(() => {
+    if (!isStreaming && !isLoading && msgs.length > 0 && !prevStreaming.current) {
+      setTimeout(() => {
+        virtualizer.scrollToIndex(msgs.length - 1, { align: "end" });
+      }, 50);
+    }
+  }, [isLoading, msgs.length]);
+
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const el = scrollRef.current;

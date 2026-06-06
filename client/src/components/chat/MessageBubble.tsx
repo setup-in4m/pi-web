@@ -8,8 +8,6 @@ import { usePanelStore } from "../../stores/panelStore";
 interface Props {
   message: MessageRecord;
   streaming?: boolean;
-  onRegen?: () => void;
-  showRegen?: boolean;
   panelIndex?: number;
 }
 
@@ -63,9 +61,9 @@ function executeInlineCode(code: string, lang: string, btn: HTMLElement) {
   }
 }
 
-export function MessageBubble({ message, streaming, onRegen, showRegen, panelIndex }: Props) {
+export function MessageBubble({ message, streaming, panelIndex }: Props) {
   const isUser = message.role === "user";
-  const [copyMenuOpen, setCopyMenuOpen] = useState(false);
+  const [modelInfoOpen, setModelInfoOpen] = useState(false);
 
   useEffect(() => {
     if (!streaming) return;
@@ -98,7 +96,6 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
     }
 
     if (streaming) {
-      // Plain text streaming — fast path: escape HTML, convert newlines
       return escapeHtml(message.content).replace(/\n/g, '<br>');
     }
 
@@ -126,29 +123,7 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
       const l = btn.getAttribute("data-lang");
       if (c && l) executeInlineCode(c, l, btn);
     }
-    if (!target.closest(".copy-menu-trigger") && !target.closest(".copy-menu-dropdown")) {
-      setCopyMenuOpen(false);
-    }
   }, []);
-
-  const handleCopyText = useCallback(() => {
-    const div = document.createElement("div");
-    div.innerHTML = message.content;
-    navigator.clipboard.writeText(div.textContent || "").catch(() => {});
-    setCopyMenuOpen(false);
-  }, [message.content]);
-
-  const handleCopyMarkdown = useCallback(() => {
-    const raw = message.content
-      .replace(/<[^>]+>/g, "")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#039;/g, "'");
-    navigator.clipboard.writeText(raw).catch(() => {});
-    setCopyMenuOpen(false);
-  }, [message.content]);
 
   // ── Model info for assistant messages ────────────────
   const panel = usePanelStore((s) => panelIndex != null ? s.panels[panelIndex] : undefined);
@@ -158,7 +133,6 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
   const currentModel = panel?.model || { provider: defaultProvider, modelId: defaultModel };
   const modelObj = currentModel ? models.find(m => m.providerId === currentModel.provider && m.modelId === currentModel.modelId) : undefined;
   const modelDisplay = modelObj?.displayName || currentModel?.modelId || `${currentModel?.provider}/${currentModel?.modelId}`;
-  const [modelInfoOpen, setModelInfoOpen] = useState(false);
 
   const dotColor = isUser ? 'var(--color-accent)' : modelDotColor(modelDisplay);
   const roleLabel = isUser ? 'You' : (modelDisplay?.split('/').pop() || 'pi');
@@ -179,7 +153,7 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
 
   return (
     <div className="flex flex-col mb-2 animate-[fadeIn_0.2s_ease] group/msg">
-      {/* Role line */}
+      {/* Role line — clean: dot + label + time + tokens, no action buttons */}
       <div className="flex items-center gap-1.5 mb-0.5 relative">
         <span
           className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -210,40 +184,11 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
           {formatTime(message.timestamp)}
         </span>
         <span
-          className="text-[7px] text-[var(--color-t3)]/0 hover:text-[var(--color-t3)] transition-colors cursor-help"
+          className="text-[7px] text-[var(--color-t3)] cursor-help"
           title={`~${tokens.toLocaleString()} tokens`}
         >
           ~{tokens.toLocaleString()} tok
         </span>
-
-        {!streaming && (
-          <div className="flex items-center gap-0.5 ml-auto opacity-0 group-hover/msg:opacity-100 transition-opacity">
-            <div className="relative">
-              <button
-                className="copy-menu-trigger text-[var(--color-t3)] hover:text-[var(--color-t1)] px-0.5 py-0 transition-colors"
-                onClick={(e) => { e.stopPropagation(); setCopyMenuOpen(!copyMenuOpen); }}
-                title="Copy"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
-              {copyMenuOpen && (
-                <div className="copy-menu-dropdown absolute right-0 top-full mt-0.5 bg-[var(--color-bg2)] border border-[var(--color-bdl)] rounded shadow-lg z-30 py-0.5 min-w-[110px]">
-                  <button onClick={(e) => { e.stopPropagation(); handleCopyText(); }} className="block w-full text-left px-2 py-1 text-[10px] text-[var(--color-t2)] hover:bg-[var(--color-bgh)] transition-colors">Copy text</button>
-                  <button onClick={(e) => { e.stopPropagation(); handleCopyMarkdown(); }} className="block w-full text-left px-2 py-1 text-[10px] text-[var(--color-t2)] hover:bg-[var(--color-bgh)] transition-colors">Copy markdown</button>
-                </div>
-              )}
-            </div>
-            {!isUser && showRegen && onRegen && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onRegen(); }}
-                className="text-[var(--color-t3)] hover:text-[var(--color-accent)] px-0.5 py-0 transition-colors"
-                title="Regenerate response"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Message body */}

@@ -362,7 +362,7 @@ export function ChatView({ panel, panelIndex }: Props) {
         {/* Virtualized message list */}
         <div
           style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}
-          className="px-3 py-3"
+          className="py-3"
         >
           {virtualizer.getVirtualItems().map((virtualItem) => {
             const i = virtualItem.index;
@@ -416,17 +416,15 @@ export function ChatView({ panel, panelIndex }: Props) {
                     <MessageBubble
                       message={msg}
                       streaming={isStreaming}
-                      showRegen={isLastAssistant}
-                      onRegen={isLastAssistant ? handleRegenLast : undefined}
                       panelIndex={panelIndex}
                     />
                   )}
 
                   {!isEditing && !panel.streaming && (
-                    <div className={`absolute top-0 ${msg.role === "user" ? "left-2" : "right-2"} opacity-0 group-hover/message:opacity-100 transition-opacity flex gap-0.5`}>
+                    <div className="absolute bottom-0 right-0 opacity-0 group-hover/message:opacity-100 transition-opacity flex gap-0.5 pb-1">
                       <button
                         onClick={() => handleCopyMessage(msg.content)}
-                        className="p-0.5 rounded text-[var(--color-t3)] hover:text-[var(--color-t1)] hover:bg-[var(--color-bgh)] transition-colors"
+                        className="p-0.5 rounded bg-[var(--color-bg2)]/90 border border-[var(--color-bdl)] text-[var(--color-t3)] hover:text-[var(--color-t1)] hover:bg-[var(--color-bgh)] transition-colors"
                         title="Copy message"
                         aria-label="Copy message"
                       >
@@ -435,7 +433,7 @@ export function ChatView({ panel, panelIndex }: Props) {
                       {msg.role === "user" && (
                         <button
                           onClick={() => handleEditMessage(i, msg.content)}
-                          className="p-0.5 rounded text-[var(--color-t3)] hover:text-[var(--color-t1)] hover:bg-[var(--color-bgh)] transition-colors"
+                          className="p-0.5 rounded bg-[var(--color-bg2)]/90 border border-[var(--color-bdl)] text-[var(--color-t3)] hover:text-[var(--color-t1)] hover:bg-[var(--color-bgh)] transition-colors"
                           title="Edit and resend"
                           aria-label="Edit and resend message"
                         >
@@ -448,7 +446,6 @@ export function ChatView({ panel, panelIndex }: Props) {
                             const text = document.createElement("div");
                             text.innerHTML = msg.content;
                             const plain = text.textContent || "";
-                            // Send to the next panel
                             const currentIdx = panels.indexOf(panel);
                             const targetIdx = (currentIdx + 1) % panels.length;
                             usePanelStore.getState().setActive(targetIdx);
@@ -460,26 +457,24 @@ export function ChatView({ panel, panelIndex }: Props) {
                             }
                             addToast("Piped to panel " + (targetIdx + 1), "success");
                           }}
-                          className="p-0.5 rounded text-[var(--color-t3)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bgh)] transition-colors"
+                          className="p-0.5 rounded bg-[var(--color-bg2)]/90 border border-[var(--color-bdl)] text-[var(--color-t3)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bgh)] transition-colors"
                           title="Send to next panel"
                           aria-label="Send to next panel"
                         >
                           <SendHorizontal size={11} aria-hidden="true" />
                         </button>
                       )}
-                      {/* Branch button — appears on any message, forks from this point */}
                       <button
                         onClick={() => {
                           const panelIdx = panels.indexOf(panel);
                           if (panelIdx >= 0) branchFromMessage(panelIdx, i);
                         }}
-                        className="p-0.5 rounded text-[var(--color-t3)] hover:text-[var(--color-warning)] hover:bg-[var(--color-bgh)] transition-colors"
+                        className="p-0.5 rounded bg-[var(--color-bg2)]/90 border border-[var(--color-bdl)] text-[var(--color-t3)] hover:text-[var(--color-warning)] hover:bg-[var(--color-bgh)] transition-colors"
                         title="Branch from here"
                         aria-label="Branch from this message"
                       >
                         <GitFork size={11} aria-hidden="true" />
                       </button>
-                      {/* Sub-agent button — spawns sub-agent on this message content */}
                       {msg.role === "assistant" && panel.sessionKey && (
                         <button
                           onClick={() => {
@@ -490,25 +485,23 @@ export function ChatView({ panel, panelIndex }: Props) {
                             const panelIdx = panels.indexOf(panel);
                             if (panelIdx >= 0) spawnSubAgent(panelIdx, task);
                           }}
-                          className="p-0.5 rounded text-[var(--color-t3)] hover:text-[#3b82f6] hover:bg-[var(--color-bgh)] transition-colors"
+                          className="p-0.5 rounded bg-[var(--color-bg2)]/90 border border-[var(--color-bdl)] text-[var(--color-t3)] hover:text-[#3b82f6] hover:bg-[var(--color-bgh)] transition-colors"
                           title="Spawn sub-agent"
                           aria-label="Spawn sub-agent"
                         >
                           <Bot size={11} aria-hidden="true" />
                         </button>
                       )}
-                      {/* Regen button — only on the LAST assistant message */}
                       {isLastAssistant && panel.sessionKey && (
                         <button
                           onClick={handleRegenLast}
-                          className="p-0.5 rounded text-[var(--color-t3)] hover:text-[#22c55e] hover:bg-[var(--color-bgh)] transition-colors"
+                          className="p-0.5 rounded bg-[var(--color-bg2)]/90 border border-[var(--color-bdl)] text-[var(--color-t3)] hover:text-[#22c55e] hover:bg-[var(--color-bgh)] transition-colors"
                           title="Regenerate response"
                           aria-label="Regenerate last response"
                         >
                           <RotateCcw size={11} aria-hidden="true" />
                         </button>
                       )}
-                      {/* Pin button */}
                       <button
                         onClick={() => {
                           const panelIdx = panels.indexOf(panel);
@@ -519,7 +512,7 @@ export function ChatView({ panel, panelIndex }: Props) {
                             pinMessage(panelIdx, i);
                           }
                         }}
-                        className={`p-0.5 rounded transition-colors ${
+                        className={`p-0.5 rounded bg-[var(--color-bg2)]/90 border border-[var(--color-bdl)] transition-colors ${
                           panel.pinnedIndices?.includes(i)
                             ? "text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
                             : "text-[var(--color-t3)] hover:text-[var(--color-accent)] hover:bg-[var(--color-bgh)]"

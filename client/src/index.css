@@ -267,22 +267,24 @@ svg.lucide,
   background: var(--color-bg3);
 }
 
-/* ── Visual hierarchy opacity (like pi CLI) ───────── */
-.thinking-section { opacity: 0.55; }
-.thinking-section:not(.collapsed) .thinking-content-inner { opacity: 0.75; }
+/* ── Visual hierarchy (like pi CLI) ───────── */
+.thinking-section {}
+.thinking-section .thinking-content-inner {}
 
-.tool-card { opacity: 0.65; }
-.tool-card[open] { opacity: 0.82; }
+.tool-card {}
+.tool-card[open] {}
 .tool-card summary { color: var(--color-t3); }
 
-.sub-agent-card { opacity: 0.65; }
-.sub-agent-card[open] { opacity: 0.85; }
+.sub-agent-card {}
+.sub-agent-card[open] {}
 
 /* ── Thinking sections (match pi CLI feel) ────────── */
 .thinking-section {
-  margin: 0.15rem 0 0.25rem 0;
+  margin: 0.25rem 0;
   border-left: 2px solid var(--color-accent);
-  padding-left: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: color-mix(in srgb, var(--color-accent) 4%, transparent);
+  border-radius: 0 4px 4px 0;
 }
 .thinking-header {
   display: flex;

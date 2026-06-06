@@ -386,12 +386,13 @@ export function squashOutsideCode(text: string): string {
 // ── Thinking section HTML builder ───────────────────────
 
 /** Build an Odysseus-style collapsible thinking section (rendered markdown content) */
-export function createThinkingSection(thinkingContent: string, thinkingTime?: string | null): string {
+export function createThinkingSection(thinkingContent: string, thinkingTime?: string | null, defaultCollapsed?: boolean): string {
   const rendered = renderMarkdown(thinkingContent);
   const timeHtml = thinkingTime
     ? `<span class="thinking-time">${escapeHtml(thinkingTime)}s</span>`
     : "";
-  return `<div class="thinking-section">
+  const collapsedClass = defaultCollapsed ? " collapsed" : "";
+  return `<div class="thinking-section${collapsedClass}">
   <div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">
     <span>View thinking process</span>
     ${timeHtml}
@@ -404,11 +405,12 @@ export function createThinkingSection(thinkingContent: string, thinkingTime?: st
 }
 
 /** Build thinking section with pre-escaped raw text (no markdown) */
-export function createThinkingSectionRaw(thinkingContent: string, thinkingTime?: string | null): string {
+export function createThinkingSectionRaw(thinkingContent: string, thinkingTime?: string | null, defaultCollapsed?: boolean): string {
   const timeHtml = thinkingTime
     ? `<span class="thinking-time">${escapeHtml(thinkingTime)}s</span>`
     : "";
-  return `<div class="thinking-section">
+  const collapsedClass = defaultCollapsed ? " collapsed" : "";
+  return `<div class="thinking-section${collapsedClass}">
   <div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">
     <span>View thinking process</span>
     ${timeHtml}

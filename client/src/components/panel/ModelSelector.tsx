@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Search, Star, Clock, ChevronDown, ChevronRight, Zap, AlertCircle, Loader2 } from "lucide-react";
+import { Star, Clock, ChevronDown, ChevronRight, Zap, AlertCircle, Loader2 } from "lucide-react";
 import type { Model } from "../../lib/api";
 import type { RecentModelEntry } from "../../stores/modelStore";
 import { useModelStore } from "../../stores/modelStore";
@@ -29,10 +29,8 @@ interface Props {
 
 export function ModelSelector({ models, providers, recentModels, currentModel, onSelect, onAddRecent }: Props) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set(providers));
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Close on outside click
   useEffect(() => {
@@ -46,26 +44,6 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Focus search on open
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    } else {
-      setSearch("");
-    }
-  }, [open]);
-
-  const filteredModels = useMemo(() => {
-    if (!search.trim()) return models;
-    const lower = search.toLowerCase();
-    return models.filter(
-      (m) =>
-        m.displayName.toLowerCase().includes(lower) ||
-        m.providerId.toLowerCase().includes(lower) ||
-        m.modelId.toLowerCase().includes(lower)
-    );
-  }, [models, search]);
-
   // Recently used lookup (recent entries that exist in current models)
   const recentInList = useMemo(() => {
     return recentModels
@@ -73,16 +51,16 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
       .filter(Boolean) as Model[];
   }, [recentModels, models]);
 
-  // Group filtered models by provider
+  // Group models by provider
   const grouped = useMemo(() => {
     const map = new Map<string, Model[]>();
-    for (const m of filteredModels) {
+    for (const m of models) {
       const list = map.get(m.providerId) || [];
       list.push(m);
       map.set(m.providerId, list);
     }
     return map;
-  }, [filteredModels]);
+  }, [models]);
 
   const handleSelect = (provider: string, modelId: string) => {
     onSelect(provider, modelId);
@@ -141,19 +119,6 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
       {/* Dropdown */}
       {open && (
         <div className="absolute top-full left-0 mt-1 w-[280px] bg-[var(--color-bg2)] border border-[var(--color-bdl)] rounded-lg shadow-2xl z-50 overflow-hidden flex flex-col">
-          {/* Search */}
-          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-[var(--color-bd)]">
-            <Search size={12} className="text-[var(--color-t3)] flex-shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search models…"
-              className="flex-1 bg-transparent text-[11px] text-[var(--color-t1)] outline-none placeholder:text-[var(--color-t3)]"
-            />
-          </div>
-
           {/* List */}
           <div className="max-h-[320px] overflow-y-auto">
             {/* Empty / loading state */}
@@ -180,7 +145,7 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
             )}
 
             {/* Recently used section */}
-            {hasModels && recentInList.length > 0 && !search && (
+            {hasModels && recentInList.length > 0 && (
               <div className="border-b border-[var(--color-bd)]">
                 <div className="px-3 py-1.5 text-[9px] text-[var(--color-t3)] font-medium flex items-center gap-1">
                   <Clock size={10} />
@@ -201,8 +166,8 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
               </div>
             )}
 
-            {/* Default indicator section (non-interactive, info only) */}
-            {!search && defaultModelObj && (
+            {/* Default indicator */}
+            {defaultModelObj && (
               <div className="px-3 py-1.5 border-b border-[var(--color-bd)] flex items-center gap-2">
                 <span className="text-[9px] text-[var(--color-t3)]">Default:</span>
                 <span className="text-[10px] font-medium text-[var(--color-t2)]">{defaultModelObj.displayName}</span>
@@ -217,21 +182,7 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
             )}
 
             {/* Grouped by provider */}
-            {search
-              ? // Flat list when searching
-                filteredModels.map((m) => (
-                  <ModelRow
-                    key={`${m.providerId}/${m.modelId}`}
-                    model={m}
-                    selected={
-                      currentModel?.provider === m.providerId &&
-                      currentModel?.modelId === m.modelId
-                    }
-                    onSelect={() => handleSelect(m.providerId, m.modelId)}
-                    isDefault={isDefaultActive(m)}
-                  />
-                ))
-              : providers
+            {hasModels && providers
                   .filter((prov) => grouped.has(prov))
                   .map((prov) => {
                     const list = grouped.get(prov)!;

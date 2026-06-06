@@ -18,6 +18,7 @@ export interface PanelData {
   streaming: boolean;
   loadingMessages: boolean;
   thinkingContent: string;
+  thinkingStartTime: number | null;   // ms timestamp when thinking started
   streamingOutputTokens: number;  // estimated output tokens during streaming
   thinkingTokens: number;           // estimated thinking tokens
   usage: UsageInfo | null;
@@ -116,7 +117,7 @@ function loadPersisted(): PanelSlice {
     panels: [{
       id: 1, workspacePath: null, sessionKey: null, sessionId: null,
       title: "", model: null, thinking: "off",
-      messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingTextIdx: null,
+      messages: [], streaming: false, loadingMessages: false, thinkingContent: "", thinkingStartTime: null, streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingTextIdx: null,
     }],
     activeIndex: 0,
     nextId: 2,
@@ -205,6 +206,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
       case "agent_end":
         state.setStreaming(event.sessionKey, false);
         state.resetStreamingTokens(event.sessionKey);
+        state.closeLiveThinking(event.sessionKey);
         if (event.usage) state.setUsage(event.sessionKey, event.usage);
         break;
       case "error":
@@ -298,7 +300,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         workspacePath: s.panels[s.activeIndex]?.workspacePath || null,
         sessionKey: null, sessionId: null, title: "",
         model: null, thinking: "off",
-        messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingTextIdx: null,
+        messages: [], streaming: false, loadingMessages: false, thinkingContent: "", thinkingStartTime: null, streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingTextIdx: null,
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -594,7 +596,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         messages: [],
         streaming: false,
         loadingMessages: false,
-        thinkingContent: "",
+        thinkingContent: "", thinkingStartTime: null,
         streamingOutputTokens: 0,
         thinkingTokens: 0,
         usage: null,
@@ -635,7 +637,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         messages: [{ role: "user", content: message, timestamp: new Date().toISOString() }],
         streaming: true,
         loadingMessages: false,
-        thinkingContent: "",
+        thinkingContent: "", thinkingStartTime: null,
         streamingOutputTokens: 0,
         thinkingTokens: 0,
         usage: null,
@@ -702,7 +704,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         messages: [],
         streaming: false,
         loadingMessages: false,
-        thinkingContent: "",
+        thinkingContent: "", thinkingStartTime: null,
         streamingOutputTokens: 0,
         thinkingTokens: 0,
         usage: null,
@@ -741,7 +743,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         messages: [...contextMessages],
         streaming: false,
         loadingMessages: false,
-        thinkingContent: "",
+        thinkingContent: "", thinkingStartTime: null,
         streamingOutputTokens: 0,
         thinkingTokens: 0,
         usage: null,
@@ -1022,6 +1024,9 @@ export const usePanelStore = create<PanelState>((set, get) => {
         if (!panel) return s;
         const msgs = [...panel.messages];
         const accumulatedContent = panel.thinkingContent + thinkingContent;
+        const startTime = panel.thinkingStartTime ?? Date.now();
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        const thinkTimeStr = elapsed >= 1 ? String(elapsed) : null;
         // Search for existing live thinking block
         let existingIdx = -1;
         for (let i = msgs.length - 1; i >= Math.max(0, msgs.length - 5); i--) {
@@ -1034,14 +1039,14 @@ export const usePanelStore = create<PanelState>((set, get) => {
           // Update existing live thinking block with accumulated content
           msgs[existingIdx] = {
             ...msgs[existingIdx],
-            content: renderLiveThinking({ content: accumulatedContent, streaming: true }),
+            content: renderLiveThinking({ content: accumulatedContent, streaming: true, thinkingTime: thinkTimeStr }),
           };
         } else {
           // Create new live thinking block — insert BEFORE the plain-text message
           const textIdx = findTextMsgIdx(msgs);
           const thinkingMsg = {
             role: "assistant" as const,
-            content: renderLiveThinking({ content: accumulatedContent, streaming: true }),
+            content: renderLiveThinking({ content: accumulatedContent, streaming: true, thinkingTime: thinkTimeStr }),
             timestamp: new Date().toISOString(),
           };
           if (textIdx >= 0) {
@@ -1052,7 +1057,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         }
         return {
           panels: s.panels.map((p) =>
-            p.sessionKey === key ? { ...p, messages: msgs, thinkingContent: accumulatedContent } : p
+            p.sessionKey === key ? { ...p, messages: msgs, thinkingContent: accumulatedContent, thinkingStartTime: startTime } : p
           ),
         };
       }),
@@ -1062,6 +1067,8 @@ export const usePanelStore = create<PanelState>((set, get) => {
         panels: s.panels.map((p) => {
           if (p.sessionKey !== key) return p;
           const msgs = [...p.messages];
+          const defaultCollapsed = localStorage.getItem("pi-web-thinking-collapsed") === "true";
+          const thinkTime = p.thinkingStartTime ? Math.round((Date.now() - p.thinkingStartTime) / 1000) : undefined;
           // Convert live thinking to static foldable block, but only if we have content
           for (let i = msgs.length - 1; i >= 0; i--) {
             if (msgs[i].content.includes('data-live-thinking="true"')) {
@@ -1069,7 +1076,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
               if (content) {
                 msgs[i] = {
                   ...msgs[i],
-                  content: renderLiveThinking({ content, streaming: false }),
+                  content: createThinkingSectionRaw(content, thinkTime != null ? String(thinkTime) : null, defaultCollapsed),
                 };
               } else {
                 // No thinking content — remove the placeholder
@@ -1078,7 +1085,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
               break;
             }
           }
-          return { ...p, messages: msgs, thinkingContent: "" };
+          return { ...p, messages: msgs, thinkingContent: "", thinkingStartTime: null };
         }),
       })),
 
@@ -1127,12 +1134,16 @@ function findTextMsgIdx(msgs: MessageRecord[]): number {
 
 // ── Live thinking block renderer (streaming vs static) ──────
 
-function renderLiveThinking({ content, streaming }: { content: string; streaming: boolean }): string {
+function renderLiveThinking({ content, streaming, thinkingTime }: { content: string; streaming: boolean; thinkingTime?: string | null }): string {
+  const timeHtml = thinkingTime
+    ? `<span class="thinking-time">${escapeHtml(thinkingTime)}s</span>`
+    : '';
   if (streaming) {
     return `<div class="thinking-section" data-live-thinking="true">
   <div class="thinking-header" style="cursor:default">
     <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
-    <span>View thinking process</span>
+    <span>Thinking…</span>
+    ${timeHtml}
     <span class="thinking-toggle" style="transform:none">▾</span>
   </div>
   <div class="thinking-content">
@@ -1140,7 +1151,7 @@ function renderLiveThinking({ content, streaming }: { content: string; streaming
   </div>
 </div>`;
   }
-  return createThinkingSectionRaw(content);
+  return createThinkingSectionRaw(content, thinkingTime);
 }
 
 function renderSubAgentStart(id: string, task: string): string {

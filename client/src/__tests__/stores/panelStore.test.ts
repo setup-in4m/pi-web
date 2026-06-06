@@ -16,7 +16,7 @@ beforeEach(() => {
         messages: [],
         streaming: false,
         loadingMessages: false,
-        thinkingContent: "",
+        thinkingContent: "", thinkingStartTime: null,
         thinkingTokens: 0,
         streamingOutputTokens: 0,
         pinnedIndices: [],

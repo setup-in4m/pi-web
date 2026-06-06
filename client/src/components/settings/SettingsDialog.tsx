@@ -192,6 +192,7 @@ export function SettingsDialog({ open, onClose }: Props) {
   const { keybindings, setKeybinding, resetKeybindings } = useSettingsStore();
   const [editingAction, setEditingAction] = useState<string | null>(null);
   const addToast = useToastStore((s) => s.addToast);
+  const { thinkingCollapsed, setThinkingCollapsed } = useSettingsStore();
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const handleClose = () => {
@@ -425,6 +426,21 @@ export function SettingsDialog({ open, onClose }: Props) {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Thinking default state */}
+              <div>
+                <div className="text-[11px] font-medium text-[var(--color-t2)] mb-2">Thinking Blocks</div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={thinkingCollapsed}
+                    onChange={(e) => setThinkingCollapsed(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-[var(--color-bd)] bg-[var(--color-bg3)] cursor-pointer accent-[var(--color-accent)]"
+                  />
+                  <span className="text-[11px] text-[var(--color-t2)]">Collapsed by default</span>
+                </label>
+                <div className="text-[9px] text-[var(--color-t3)] mt-1 ml-5">When enabled, thinking blocks start collapsed. Click to expand.</div>
               </div>
             </div>
           )}

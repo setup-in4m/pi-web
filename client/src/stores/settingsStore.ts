@@ -37,11 +37,13 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
 
 interface SettingsState {
   keybindings: Record<string, string>; // action → shortcut string
+  thinkingCollapsed: boolean;           // default thinking block state (true = collapsed by default)
 
   setKeybinding: (action: string, shortcut: string) => void;
   resetKeybindings: () => void;
   getKeybinding: (action: string) => string;
   resolveAction: (shortcut: string) => string | null;
+  setThinkingCollapsed: (collapsed: boolean) => void;
 }
 
 function loadKeybindings(): Record<string, string> {
@@ -60,8 +62,15 @@ function persist(keybindings: Record<string, string>) {
   localStorage.setItem("pi-web-keybindings", JSON.stringify(keybindings));
 }
 
+function loadCollapsed(): boolean {
+  try {
+    return localStorage.getItem("pi-web-thinking-collapsed") === "true";
+  } catch { return false; }
+}
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   keybindings: loadKeybindings(),
+  thinkingCollapsed: loadCollapsed(),
 
   setKeybinding: (action, shortcut) => {
     set((s) => {
@@ -90,5 +99,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       if (sc === shortcut) return action;
     }
     return null;
+  },
+
+  setThinkingCollapsed: (collapsed) => {
+    localStorage.setItem("pi-web-thinking-collapsed", String(collapsed));
+    set({ thinkingCollapsed: collapsed });
   },
 }));

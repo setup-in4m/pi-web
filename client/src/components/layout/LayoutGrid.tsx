@@ -147,7 +147,7 @@ export function LayoutGrid() {
   };
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-hidden min-h-0 bg-[var(--color-bd)]" style={{ gap: 0 }} key={preset}>
+    <div ref={containerRef} className="flex-1 overflow-hidden min-h-0 bg-[var(--color-bd)]" style={{ gap: 0 }}>
       {renderLayout()}
     </div>
   );

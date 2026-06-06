@@ -56,7 +56,7 @@ export function ChatView({ panel, panelIndex }: Props) {
   const virtualizer = useVirtualizer({
     count: panel.messages.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 120,
+    estimateSize: () => 200,
     overscan: 5,
   });
 
@@ -332,7 +332,7 @@ export function ChatView({ panel, panelIndex }: Props) {
 
             return (
               <div
-                key={virtualItem.key}
+                key={`${virtualItem.key}-${msg.content.length}`}
                 data-index={i}
                 ref={virtualizer.measureElement}
                 style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualItem.start}px)` }}

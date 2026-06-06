@@ -57,6 +57,7 @@ interface PanelState extends PanelSlice {
   setStreamingTokens: (key: string, tokens: number) => void;
   addThinkingTokens: (key: string, tokens: number) => void;
   resetThinkingTokens: (key: string) => void;
+  resetStreamingTokens: (key: string) => void;
 
   getByKey: (key: string) => PanelData | undefined;
 
@@ -151,8 +152,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
     switch (event.eventType) {
       case "message_start":
         state.closeLiveThinking(event.sessionKey);
-        state.setStreamingTokens(event.sessionKey, 0);
-        state.resetThinkingTokens(event.sessionKey);
+        state.resetStreamingTokens(event.sessionKey);
         if (event.replace && event.text !== undefined) {
           state.replaceLastAssistant(event.sessionKey, event.text);
         }
@@ -201,7 +201,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
       }
       case "agent_end":
         state.setStreaming(event.sessionKey, false);
-        state.setStreamingTokens(event.sessionKey, 0);
+        state.resetStreamingTokens(event.sessionKey);
         if (event.usage) state.setUsage(event.sessionKey, event.usage);
         break;
       case "error":
@@ -211,7 +211,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
             timestamp: new Date().toISOString(),
           });
           state.setStreaming(event.sessionKey, false);
-          state.setStreamingTokens(event.sessionKey, 0);
+          state.resetStreamingTokens(event.sessionKey);
         }
         break;
       // ── Sub-agent events ────────────────────────────
@@ -550,6 +550,13 @@ export const usePanelStore = create<PanelState>((set, get) => {
         ),
       })),
 
+    resetStreamingTokens: (key) =>
+      set((s) => ({
+        panels: s.panels.map((p) =>
+          p.sessionKey === key ? { ...p, streamingOutputTokens: 0, thinkingTokens: 0 } : p
+        ),
+      })),
+
     getByKey: (key) => get().panels.find((p) => p.sessionKey === key),
 
     // ── Orchestration ──────────────────────────────────────
@@ -743,19 +750,18 @@ export const usePanelStore = create<PanelState>((set, get) => {
           return ns;
         });
 
-        // Replay context messages to the new session (except tool/thinking messages, just user/assistant text)
-        for (const msg of contextMessages) {
-          if (msg.role === "user") {
-            // Extract plain text from HTML content
+        // Batch all user context messages into a single send to avoid triggering N agent turns
+        const userMessages = contextMessages
+          .filter((m) => m.role === "user")
+          .map((m) => {
             const div = document.createElement("div");
-            div.innerHTML = msg.content;
-            const plain = (div.textContent || div.innerText || msg.content).trim();
-            if (plain) {
-              await api.sendMessage(result.key, plain);
-              // Brief pause to let the server process
-              await new Promise((r) => setTimeout(r, 200));
-            }
-          }
+            div.innerHTML = m.content;
+            return (div.textContent || div.innerText || m.content).trim();
+          })
+          .filter(Boolean);
+        if (userMessages.length > 0) {
+          const batched = "[Context from branch — previous messages below, then continue]\n\n" + userMessages.join("\n\n");
+          await api.sendMessage(result.key, batched);
         }
 
         useToastStore.getState().addToast("Branch created", "success");

@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useState, useEffect } from "react";
 import type { MessageRecord } from "../../lib/api";
-import { renderMarkdown } from "../../lib/markdown";
+import { renderMarkdown, escapeHtml } from "../../lib/markdown";
 import { useModelStore } from "../../stores/modelStore";
 import { usePanelStore } from "../../stores/panelStore";
 
@@ -84,8 +84,12 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
 
   const formatted = useMemo(() => {
     if (isUser) return formatSimple(message.content);
+    if (streaming) {
+      // Fast path during streaming: escape HTML only, no markdown parse
+      return escapeHtml(message.content).replace(/\n/g, '<br>');
+    }
     return renderMarkdown(message.content);
-  }, [message.content, isUser]);
+  }, [message.content, isUser, streaming]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;

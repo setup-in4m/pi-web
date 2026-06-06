@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Search, Star, Clock, ChevronDown, ChevronRight, Zap } from "lucide-react";
+import { Search, Star, Clock, ChevronDown, ChevronRight, Zap, AlertCircle, Loader2 } from "lucide-react";
 import type { Model } from "../../lib/api";
 import type { RecentModelEntry } from "../../stores/modelStore";
 import { useModelStore } from "../../stores/modelStore";
@@ -99,11 +99,14 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
     });
   };
 
-  const { defaultProvider, defaultModel } = useModelStore();
+  const { defaultProvider, defaultModel, loading: modelsLoading } = useModelStore();
   const defaultModelObj = models.find(m => m.providerId === defaultProvider && m.modelId === defaultModel);
-  const currentDisplay = currentModel
-    ? models.find((m) => m.providerId === currentModel.provider && m.modelId === currentModel.modelId)?.displayName || `${currentModel.provider}/${currentModel.modelId}`
-    : defaultModelObj?.displayName || defaultModel || "pi default";
+  const hasModels = models.length > 0;
+  const currentDisplay = hasModels
+    ? (currentModel
+        ? models.find((m) => m.providerId === currentModel.provider && m.modelId === currentModel.modelId)?.displayName || `${currentModel.provider}/${currentModel.modelId}`
+        : defaultModelObj?.displayName || defaultModel || "pi default")
+    : "No models";
   const isDefaultSelected = !currentModel && !!defaultModelObj;
   const isDefaultActive = (model: Model) =>
     !!defaultModelObj &&
@@ -115,13 +118,23 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
       {/* Trigger button */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-1.5 py-0.5 text-[9px] font-sans cursor-pointer max-w-[130px] outline-none hover:border-[var(--color-bdl)] transition-colors"
-        title={currentModel ? currentDisplay : `Default: ${currentDisplay}`}
+        className={`flex items-center gap-1 bg-[var(--color-bg3)] border rounded px-1.5 py-0.5 text-[9px] font-sans cursor-pointer max-w-[130px] outline-none transition-colors ${
+          !hasModels && !modelsLoading
+            ? "text-[var(--color-warning)] border-[var(--color-warning)]/40 hover:border-[var(--color-warning)]"
+            : "text-[var(--color-t2)] border-[var(--color-bd)] hover:border-[var(--color-bdl)]"
+        }`}
+        title={!hasModels ? "No models available" : currentModel ? currentDisplay : `Default: ${currentDisplay}`}
       >
-        {isDefaultSelected && (
+        {!hasModels && !modelsLoading && (
+          <AlertCircle size={8} className="text-[var(--color-warning)] flex-shrink-0" />
+        )}
+        {!hasModels && modelsLoading && (
+          <Loader2 size={8} className="animate-spin text-[var(--color-t3)] flex-shrink-0" />
+        )}
+        {hasModels && isDefaultSelected && (
           <Zap size={8} className="text-[var(--color-accent)] flex-shrink-0" />
         )}
-        <span className="truncate">{currentDisplay}</span>
+        <span className="truncate">{modelsLoading ? "Loading…" : currentDisplay}</span>
         <ChevronDown size={9} className={`flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
@@ -143,8 +156,31 @@ export function ModelSelector({ models, providers, recentModels, currentModel, o
 
           {/* List */}
           <div className="max-h-[320px] overflow-y-auto">
+            {/* Empty / loading state */}
+            {!hasModels && (
+              <div className="px-4 py-6 flex flex-col items-center gap-2 text-center">
+                {modelsLoading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-[var(--color-t3)]" />
+                    <span className="text-[10px] text-[var(--color-t3)]">Loading models…</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle size={16} className="text-[var(--color-warning)]" />
+                    <div className="text-[10px] text-[var(--color-t2)]">
+                      No models found.
+                    </div>
+                    <div className="text-[9px] text-[var(--color-t3)] leading-relaxed">
+                      Configure providers in pi CLI settings<br />
+                      or check that the pi server is running.
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Recently used section */}
-            {recentInList.length > 0 && !search && (
+            {hasModels && recentInList.length > 0 && !search && (
               <div className="border-b border-[var(--color-bd)]">
                 <div className="px-3 py-1.5 text-[9px] text-[var(--color-t3)] font-medium flex items-center gap-1">
                   <Clock size={10} />

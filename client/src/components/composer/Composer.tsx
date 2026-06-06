@@ -476,7 +476,7 @@ export function Composer({ panelIndex, disabled }: Props) {
         </button>
         <button
           onClick={handleSend}
-          disabled={disabled || !textareaRef.current?.value?.trim()}
+          disabled={disabled || charCount === 0}
           className="w-[28px] h-[28px] bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-25 disabled:cursor-not-allowed rounded flex items-center justify-center transition-colors flex-shrink-0"
         >
           <Send size={13} className="text-white" />
@@ -502,17 +502,4 @@ export function Composer({ panelIndex, disabled }: Props) {
   );
 }
 
-// ── Ctrl+K focus shortcut ───────────────────────────
-if (typeof window !== "undefined") {
-  window.addEventListener("keydown", (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-      e.preventDefault();
-      const textareas = document.querySelectorAll("textarea");
-      Array.from(textareas).forEach((ta: Element) => {
-        if (!(ta as HTMLTextAreaElement).disabled) {
-          (ta as HTMLTextAreaElement).focus();
-        }
-      });
-    }
-  });
-}
+

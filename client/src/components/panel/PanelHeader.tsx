@@ -6,18 +6,21 @@ import { ProfileSelector } from "./ProfileSelector";
 import { ModelSelector } from "./ModelSelector";
 import { Download, Copy, FileText, Code, ChevronDown, Share2, Eye, EyeOff } from "lucide-react";
 import { useToastStore } from "../../stores/toastStore";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, memo } from "react";
 
 interface Props {
   panel: PanelData;
   panelIndex: number;
 }
 
-export function PanelHeader({ panel, panelIndex }: Props) {
+export const PanelHeader = memo(function PanelHeader({ panel, panelIndex }: Props) {
   const setModel = usePanelStore((s) => s.setModel);
   const setThinking = usePanelStore((s) => s.setThinking);
   const toggleHideThinking = usePanelStore((s) => s.toggleHideThinking);
-  const { models, providers, recentModels, addRecentModel } = useModelStore();
+  const models = useModelStore((s) => s.models);
+  const providers = useModelStore((s) => s.providers);
+  const recentModels = useModelStore((s) => s.recentModels);
+  const addRecentModel = useModelStore((s) => s.addRecentModel);
   const addToast = useToastStore((s) => s.addToast);
   const setTitle = usePanelStore((s) => s.setTitle);
   const [exportOpen, setExportOpen] = useState(false);
@@ -219,4 +222,4 @@ export function PanelHeader({ panel, panelIndex }: Props) {
       </div>
     </div>
   );
-}
+});

@@ -37,8 +37,9 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
     workspaces, loading, error, addWorkspace, removeWorkspace, removeWorkspaceRemote,
     refreshWorkspace, loadMoreSessions, deleteSession, usageCache, hasMore
   } = useWorkspaceStore();
-  const { models } = useModelStore();
-  const { panels, openExistingSession } = usePanelStore();
+  const models = useModelStore((s) => s.models);
+  const panels = usePanelStore((s) => s.panels);
+  const openExistingSession = usePanelStore((s) => s.openExistingSession);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [version, setVersion] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>(getStoredSort);

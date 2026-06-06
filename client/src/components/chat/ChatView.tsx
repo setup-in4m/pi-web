@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, Copy, Pencil, SendHorizontal, GitFork, Bot, Pin, RotateCcw, ArrowUp, FolderOpen } from "lucide-react";
 import type { PanelData } from "../../stores/panelStore";
@@ -15,7 +15,7 @@ interface Props {
   panelIndex?: number;
 }
 
-export function ChatView({ panel, panelIndex }: Props) {
+export const ChatView = memo(function ChatView({ panel, panelIndex }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -392,7 +392,7 @@ export function ChatView({ panel, panelIndex }: Props) {
 
             return (
               <div
-                key={`${virtualItem.key}-${msg.content?.length ?? 0}`}
+                key={virtualItem.key}
                 data-index={i}
                 ref={virtualizer.measureElement}
                 style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualItem.start}px)` }}
@@ -616,4 +616,4 @@ export function ChatView({ panel, panelIndex }: Props) {
       )}
     </div>
   );
-}
+});

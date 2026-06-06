@@ -1,9 +1,10 @@
-import { useMemo, useCallback, useState, useEffect } from "react";
-import type { MessageRecord, ContentBlock } from "../../lib/api";
+import { useMemo, useCallback, useState, useEffect, memo } from "react";
+import type { MessageRecord } from "../../lib/api";
 import { renderMarkdown, escapeHtml } from "../../lib/markdown";
 import { formatTime } from "../../lib/time";
 import { useModelStore } from "../../stores/modelStore";
 import { usePanelStore } from "../../stores/panelStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 interface Props {
   message: MessageRecord;
@@ -61,30 +62,56 @@ function executeInlineCode(code: string, lang: string, btn: HTMLElement) {
   }
 }
 
-/** Render blocks as HTML during streaming (no markdown, just escaped). */
-function streamingBlocksHtml(blocks: ContentBlock[]): string {
-  if (!blocks || !blocks.length) return '';
-  let html = '';
-  for (const block of blocks) {
-    if (block.type === "thinking") {
-      html += `<div class="thinking-section" data-live-thinking="true">
-  <div class="thinking-header" data-pi-toggle="thinking" style="cursor:pointer">
-    <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
-    <span>Thinking…</span>
-    <span class="thinking-toggle" style="transform:none">▾</span>
-  </div>
-  <div class="thinking-content">
-    <div class="thinking-content-inner">${escapeHtml(block.content)}<span class="streaming-cursor">▊</span></div>
-  </div>
-</div>`;
-    } else {
-      html += escapeHtml(block.content) + '<span class="streaming-cursor">▊</span>';
-    }
+/** Thinking block as a React component — owns its own collapse state via useState.
+ *  Toggle survives re-renders because React preserves component state
+ *  when key/index stays the same across renders. */
+function ThinkingBlock({ content, streaming, defaultCollapsed, thinkId }: { content: string; streaming: boolean; defaultCollapsed: boolean; thinkId?: string }) {
+  // Restore toggle from global state if remounted (virtualizer recycle safety)
+  const initialExpanded = thinkId && (window as any).__thinkIsExpanded
+    ? (window as any).__thinkIsExpanded(thinkId)
+    : null;
+  const [collapsed, setCollapsed] = useState(
+    initialExpanded !== null ? !initialExpanded : defaultCollapsed
+  );
+  const toggle = useCallback(() => {
+    setCollapsed(c => {
+      const next = !c;
+      if (thinkId && (window as any).__thinkToggle) {
+        (window as any).__thinkToggle(thinkId, !next);
+      }
+      return next;
+    });
+  }, [thinkId]);
+
+  if (streaming) {
+    return (
+      <div className={`thinking-section${collapsed ? ' collapsed' : ''}`} data-live-thinking="true">
+        <div className="thinking-header" onClick={toggle} style={{cursor:'pointer'}}>
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
+          <span>Thinking…</span>
+          <span className="thinking-toggle" style={{transform:'none'}}>▾</span>
+        </div>
+        <div className="thinking-content">
+          <div className="thinking-content-inner">{escapeHtml(content)}<span className="streaming-cursor">▊</span></div>
+        </div>
+      </div>
+    );
   }
-  return html;
+
+  return (
+    <div className={`thinking-section${collapsed ? ' collapsed' : ''}`}>
+      <div className="thinking-header" onClick={toggle}>
+        <span>View thinking process</span>
+        <span className="thinking-toggle">▾</span>
+      </div>
+      <div className="thinking-content">
+        <div className="thinking-content-inner" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />
+      </div>
+    </div>
+  );
 }
 
-export function MessageBubble({ message, streaming, panelIndex }: Props) {
+export const MessageBubble = memo(function MessageBubble({ message, streaming, panelIndex }: Props) {
   const isUser = message.role === "user";
   const [modelInfoOpen, setModelInfoOpen] = useState(false);
 
@@ -105,50 +132,97 @@ export function MessageBubble({ message, streaming, panelIndex }: Props) {
   }, [streaming]);
 
 /** Infrastructure messages (thinking, tool cards, sub-agents) — render HTML as-is */
-  const isInfra =
+  const isInfra = !!(message.content) && (
     message.content.includes('thinking-section') ||
     message.content.includes('tool-card') ||
     message.content.includes('sub-agent-card') ||
-    message.content.includes('data-live-thinking');
+    message.content.includes('data-live-thinking')
+  );
+
+  /** True if message is pure infra (no text blocks, only infra HTML).
+   *  When all blocks are thinking + no text blocks, treat as infra. */
+  const isPureInfra = isInfra && (
+    !message.blocks ||
+    message.blocks.length === 0 ||
+    message.blocks.every(b => b.type === 'thinking')
+  );
 
   // Blocks-based message (new unified format): render from blocks within one message
   const hasBlocks = message.blocks && message.blocks.length > 0;
   // True while streaming with no content yet (placeholder waiting for first delta)
   const isEmptyStreaming = streaming && !isUser && !hasBlocks && !message.content;
 
-  const formatted = useMemo(() => {
-    if (isUser) return formatSimple(message.content);
+  const content = message.content ?? '';
+  const defaultCollapsed = useSettingsStore((s) => s.thinkingCollapsed);
 
-    if (isInfra && !hasBlocks) {
-      return message.content; // raw HTML from legacy renderers, safe
+  const formatted = useMemo<string>(() => {
+    if (isUser) return formatSimple(content);
+
+    // Pure infra: render raw HTML, no role line
+    if (isPureInfra) {
+      return content;
     }
 
     if (streaming) {
-      // During streaming with blocks, render text blocks live
-      if (hasBlocks) {
-        return streamingBlocksHtml(message.blocks!);
+      if (!hasBlocks) {
+        // Legacy streaming (no blocks): escaped plain text
+        return escapeHtml(content).replace(/\n/g, '<br>');
       }
-      // Legacy streaming: escaped plain text
-      return escapeHtml(message.content).replace(/\n/g, '<br>');
+      // Blocks-based streaming: rendered as React elements below (not HTML string)
+      return '';
     }
 
     // After streaming: render full markdown or use blocks HTML
     if (hasBlocks) {
-      return message.content; // content was pre-built from blocks via blocksToHtml
+      return content; // content was pre-built from blocks via blocksToHtml
     }
 
-    return renderMarkdown(message.content);
-  }, [message.content, message.blocks, isUser, streaming, isInfra, hasBlocks]);
+    return renderMarkdown(content);
+  }, [content, message.blocks, isUser, streaming, isPureInfra, hasBlocks]);
+
+  // During streaming with blocks, render each block as a React element.
+  // Each ThinkingBlock manages its own collapse state — toggle survives re-renders.
+  // thinkId prefix uses panelIndex so virtualizer recycles preserve state.
+  const streamThinkPrefix = panelIndex != null ? `stream-${panelIndex}` : '';
+  const blockElements = useMemo(() => {
+    if (!(streaming && hasBlocks && message.blocks)) return null;
+    return message.blocks.map((block, i) => {
+        if (block.type === 'thinking') {
+          const thinkId = streamThinkPrefix ? `${streamThinkPrefix}-${i}` : undefined;
+          return (
+            <ThinkingBlock
+              key={i}
+              thinkId={thinkId}
+              content={block.content}
+              streaming={true}
+              defaultCollapsed={defaultCollapsed}
+            />
+          );
+        }
+        return (
+          <span key={i}>
+            {escapeHtml(block.content)}
+            <span className="streaming-cursor">▊</span>
+          </span>
+        );
+      });
+  }, [streaming, hasBlocks, message.blocks, streamThinkPrefix, defaultCollapsed]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
 
-    // Thinking toggle: expand/collapse individual thinking blocks
+    // Post-streaming thinking toggle (dangerouslySetInnerHTML path)
     const thinkingHeader = target.closest("[data-pi-toggle='thinking']");
     if (thinkingHeader) {
       const section = thinkingHeader.closest(".thinking-section");
       if (section) {
-        section.classList.toggle("collapsed");
+        const wasCollapsed = section.classList.contains('collapsed');
+        section.classList.toggle('collapsed');
+        // Save toggle state so blocksToHtml preserves it across rebuilds
+        const thinkId = section.getAttribute('data-think-id');
+        if (thinkId && (window as any).__thinkToggle) {
+          (window as any).__thinkToggle(thinkId, wasCollapsed); // wasCollapsed → nowExpanded=true
+        }
       }
       return;
     }
@@ -188,11 +262,10 @@ export function MessageBubble({ message, streaming, panelIndex }: Props) {
 
   const tokens = estimateTokens(message.content || '');
 
-  // Infrastructure messages (thinking, tool cards, sub-agents) render inline
-  // without role line — they visually attach to the main response above/below.
-  // BUT: if the message has blocks (new unified format), render with role line
-  // since the thinking is just one block within a full assistant response.
-  if (isInfra && !hasBlocks) {
+  // Pure infra messages (tool cards, standalone thinking blocks, sub-agent cards)
+  // render inline without role line — visually attach to the main response.
+  // When blocks contain text (not just thinking), keep role line.
+  if (isPureInfra) {
     return (
       <div className="mb-0 animate-[fadeIn_0.2s_ease]">
         <div onClick={handleClick} className="text-[var(--color-t1)]">
@@ -265,13 +338,15 @@ export function MessageBubble({ message, streaming, panelIndex }: Props) {
         isUser ? "bg-[var(--color-bg3)] border border-[var(--color-bdl)] rounded px-3 py-2" : ""
       }`}>
         <div onClick={handleClick} className="text-[var(--color-t1)] whitespace-pre-wrap break-words [&_p]:my-0.5">
-          <span dangerouslySetInnerHTML={{ __html: formatted }} />
-          {streaming && <span className="streaming-cursor" aria-hidden="true">▊</span>}
+          {blockElements || (formatted != null ? (
+            <span dangerouslySetInnerHTML={{ __html: formatted }} />
+          ) : null)}
+          {streaming && !blockElements && <span className="streaming-cursor" aria-hidden="true">▊</span>}
         </div>
       </div>
     </div>
   );
-}
+});
 
 function formatSimple(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");

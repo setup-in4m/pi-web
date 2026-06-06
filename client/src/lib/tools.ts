@@ -28,12 +28,7 @@ export function renderToolStart({ toolName, toolInput }: ToolStart): string {
   const icon = toolIcon(type);
   const label = toolLabel(type, toolInput);
 
-  return `<div class="tool-card tool-running my-1 px-2 py-1.5 rounded border border-[var(--color-bdl)] bg-[var(--color-bg2)]">
-    <div class="flex items-center gap-1.5 text-[10px] text-[var(--color-warning)]">
-      <span class="animate-spin inline-block">${icon}</span>
-      <span class="font-medium">${label}</span>
-    </div>
-  </div>`;
+  return `<div class="tool-card tool-running my-1 px-2 py-1.5 rounded border border-[var(--color-bdl)] bg-[var(--color-bg2)]"><div class="flex items-center gap-1.5 text-[10px] text-[var(--color-warning)]"><span class="animate-spin inline-block">${icon}</span><span class="font-medium">${label}</span></div></div>`;
 }
 
 export function renderToolEnd({ toolName, toolOutput, durationMs }: ToolEnd): string {
@@ -43,14 +38,7 @@ export function renderToolEnd({ toolName, toolOutput, durationMs }: ToolEnd): st
   const body = renderToolBody(type, toolOutput);
   const timeStr = durationMs != null ? `<span class="text-[8px] text-[var(--color-t3)] ml-auto">⏱ ${(durationMs / 1000).toFixed(1)}s</span>` : "";
 
-  return `<details class="tool-card my-1 px-2 py-1.5 rounded border border-[var(--color-bdl)] bg-[var(--color-bg2)]" open>
-    <summary class="text-[10px] text-[var(--color-t2)] cursor-pointer hover:text-[var(--color-t1)] select-none flex items-center gap-1.5">
-      <span>${icon}</span>
-      <span>${label}</span>
-      ${timeStr}
-    </summary>
-    ${body}
-  </details>`;
+  return `<details class="tool-card my-1 px-2 py-1.5 rounded border border-[var(--color-bdl)] bg-[var(--color-bg2)]" open><summary class="text-[10px] text-[var(--color-t2)] cursor-pointer hover:text-[var(--color-t1)] select-none flex items-center gap-1.5"><span>${icon}</span><span>${label}</span>${timeStr}</summary>${body}</details>`;
 }
 
 const SVG_READ = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';

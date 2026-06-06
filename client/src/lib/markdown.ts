@@ -214,6 +214,11 @@ function detectPlainThink(text: string): string | null {
   return null;
 }
 
+/** Collapse 3+ consecutive newlines into max 1 blank line (2 newlines), trim leading/trailing whitespace. */
+function normalizeWhitespace(s: string): string {
+  return s.replace(/^\s+/, '').replace(/\s+$/, '').replace(/\n{3,}/g, '\n\n');
+}
+
 /** Extract thinking blocks from text, returning { thinkingBlocks, content, thinkingTime } */
 export function extractThinkingBlocks(text: string): {
   thinkingBlocks: string[];
@@ -229,7 +234,7 @@ export function extractThinkingBlocks(text: string): {
     let match;
     while ((match = rx.exec(normalized)) !== null) {
       const content = match[1].trim();
-      if (content) thinkingBlocks.push(content);
+      if (content) thinkingBlocks.push(normalizeWhitespace(content));
     }
     normalized = normalized.replace(rx, '');
   }
@@ -247,7 +252,7 @@ export function extractThinkingBlocks(text: string): {
   // Handle orphaned closing tag — text before it is thinking
   const orphanMatch = normalized.match(/^([\s\S]+?)<\/(?:think(?:ing)?|thought)>/i);
   if (orphanMatch && orphanMatch[1].trim()) {
-    thinkingBlocks.push(orphanMatch[1].trim());
+    thinkingBlocks.push(normalizeWhitespace(orphanMatch[1]));
     normalized = normalized.slice(orphanMatch[0].length);
   }
 
@@ -258,7 +263,7 @@ export function extractThinkingBlocks(text: string): {
   if (thinkingBlocks.length === 0) {
     const plain = detectPlainThink(normalized);
     if (plain) {
-      thinkingBlocks.push(plain);
+      thinkingBlocks.push(normalizeWhitespace(plain));
       normalized = normalized.slice(plain.length).trim();
       // Remove leading double break if present
       normalized = normalized.replace(/^\n+/, '');
@@ -278,18 +283,8 @@ export function renderThinkingSection(thinkContent: string, index: number = 0, t
   const timeHtml = thinkTime != null
     ? `<span class="thinking-time">${thinkTime}s</span>`
     : '';
-  return `<div class="thinking-section" id="${id}">
-    <div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">
-      <span>View thinking process</span>
-      <div style="display:flex;align-items:center;gap:6px">
-        ${timeHtml}
-        <span class="thinking-toggle">▾</span>
-      </div>
-    </div>
-    <div class="thinking-content">
-      <div class="thinking-content-inner">${renderMarkdown(thinkContent)}</div>
-    </div>
-  </div>`;
+  const cleaned = thinkContent.replace(/^\s+/, '').replace(/\s+$/, '').replace(/\n{3,}/g, '\n\n');
+  return `<div class="thinking-section" id="${id}"><div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')"><span>View thinking process</span><div style="display:flex;align-items:center;gap:6px">${timeHtml}<span class="thinking-toggle">▾</span></div></div><div class="thinking-content"><div class="thinking-content-inner">${renderMarkdown(cleaned).trimEnd()}</div></div></div>`;
 }
 
 // ── Bare URL autolinking ────────────────────────────
@@ -387,39 +382,23 @@ export function squashOutsideCode(text: string): string {
 
 /** Build an Odysseus-style collapsible thinking section (rendered markdown content) */
 export function createThinkingSection(thinkingContent: string, thinkingTime?: string | null, defaultCollapsed?: boolean): string {
-  const rendered = renderMarkdown(thinkingContent);
+  const cleaned = thinkingContent.replace(/^\s+/, '').replace(/\s+$/, '').replace(/\n{3,}/g, '\n\n');
+  const rendered = renderMarkdown(cleaned).trimEnd();
   const timeHtml = thinkingTime
     ? `<span class="thinking-time">${escapeHtml(thinkingTime)}s</span>`
     : "";
   const collapsedClass = defaultCollapsed ? " collapsed" : "";
-  return `<div class="thinking-section${collapsedClass}">
-  <div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">
-    <span>View thinking process</span>
-    ${timeHtml}
-    <span class="thinking-toggle">▾</span>
-  </div>
-  <div class="thinking-content">
-    <div class="thinking-content-inner">${rendered}</div>
-  </div>
-</div>`;
+  return `<div class="thinking-section${collapsedClass}"><div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')"><span>View thinking process</span>${timeHtml}<span class="thinking-toggle">▾</span></div><div class="thinking-content"><div class="thinking-content-inner">${rendered}</div></div></div>`;
 }
 
 /** Build thinking section with pre-escaped raw text (no markdown) */
 export function createThinkingSectionRaw(thinkingContent: string, thinkingTime?: string | null, defaultCollapsed?: boolean): string {
+  const cleaned = thinkingContent.replace(/^\s+/, '').replace(/\s+$/, '').replace(/\n{3,}/g, '\n\n');
   const timeHtml = thinkingTime
     ? `<span class="thinking-time">${escapeHtml(thinkingTime)}s</span>`
     : "";
   const collapsedClass = defaultCollapsed ? " collapsed" : "";
-  return `<div class="thinking-section${collapsedClass}">
-  <div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">
-    <span>View thinking process</span>
-    ${timeHtml}
-    <span class="thinking-toggle">▾</span>
-  </div>
-  <div class="thinking-content">
-    <div class="thinking-content-inner">${escapeHtml(thinkingContent)}</div>
-  </div>
-</div>`;
+  return `<div class="thinking-section${collapsedClass}"><div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')"><span>View thinking process</span>${timeHtml}<span class="thinking-toggle">▾</span></div><div class="thinking-content"><div class="thinking-content-inner">${escapeHtml(cleaned)}</div></div></div>`;
 }
 
 export function renderMarkdown(text: string, opts?: { skipCache?: boolean }): string {

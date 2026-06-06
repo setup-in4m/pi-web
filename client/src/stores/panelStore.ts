@@ -6,6 +6,7 @@ import { useToastStore } from "./toastStore";
 import { renderToolStart, renderToolEnd } from "../lib/tools";
 import { createThinkingSectionRaw, escapeHtml, renderMarkdown } from "../lib/markdown";
 import { useModelStore } from "./modelStore";
+import { useSettingsStore } from "./settingsStore";
 
 export interface PanelData {
   id: number;
@@ -100,6 +101,28 @@ interface PanelState extends PanelSlice {
 
 const STORAGE_KEY = "pi-web-panels";
 const _toolStartTimes = new Map<string, number>();
+/** Track manual expand/collapse state for thinking sections across re-renders.
+ *  Key: thinkId (panelId-messageIndex-blockIndex). Value: true=expanded (user manually opened). */
+const _manualExpandSet = new Set<string>();
+let _thinkIdCounter = 0;
+
+function nextThinkId(panelId: number, msgIdx: number): string {
+  return `${panelId}-${msgIdx}-${_thinkIdCounter++}`;
+}
+
+/** Register toggle tracking on window so blocksToHtml can check user's manual expand state
+ *  (used during streaming by ThinkingBlock to persist state across virtualizer recycles
+ *   and post-streaming by blocksToHtml for the final render). */
+(window as any).__thinkToggle = (thinkId: string, nowExpanded: boolean) => {
+  if (nowExpanded) {
+    _manualExpandSet.add(thinkId);
+  } else {
+    _manualExpandSet.delete(thinkId);
+  }
+};
+(window as any).__thinkIsExpanded = (thinkId: string): boolean => {
+  return _manualExpandSet.has(thinkId);
+};
 
 function loadPersisted(): PanelSlice {
   try {
@@ -190,13 +213,14 @@ export const usePanelStore = create<PanelState>((set, get) => {
                 blocks.push({ type: "text", content: event.text! });
               }
               // Update the streaming placeholder message with the blocks
+              // (content is not rebuilt during streaming — MessageBubble renders blocks as React elements)
               const msgs = [...p.messages];
               const lastMsg = msgs[msgs.length - 1];
               if (lastMsg && lastMsg.role === "assistant" && (!lastMsg.content || lastMsg.blocks)) {
                 msgs[msgs.length - 1] = {
                   ...lastMsg,
                   blocks: [...blocks],
-                  content: streamingBlocksToHtml(blocks),
+                  content: '',
                 };
               }
               const estimatedTokens = Math.round(event.text!.length / 4);
@@ -223,13 +247,14 @@ export const usePanelStore = create<PanelState>((set, get) => {
                 blocks.push({ type: "thinking", content: event.text! });
               }
               // Update the streaming placeholder message
+              // (content is not rebuilt during streaming — MessageBubble renders blocks as React elements)
               const msgs = [...p.messages];
               const lastMsg = msgs[msgs.length - 1];
               if (lastMsg && lastMsg.role === "assistant" && (!lastMsg.content || lastMsg.blocks)) {
                 msgs[msgs.length - 1] = {
                   ...lastMsg,
                   blocks: [...blocks],
-                  content: streamingBlocksToHtml(blocks),
+                  content: '',
                 };
               }
               const thinkingTokens = Math.round(event.text!.length / 4);
@@ -273,13 +298,15 @@ export const usePanelStore = create<PanelState>((set, get) => {
       }
       case "agent_end": {
         // Finalize streaming blocks into the last message
+        const defaultCollapsed = useSettingsStore.getState().thinkingCollapsed;
         set((s) => ({
           panels: s.panels.map((p) => {
             if (p.sessionKey !== event.sessionKey) return p;
             const blocks = p.streamingBlocks.length > 0 ? [...p.streamingBlocks] : undefined;
             const msgs = [...p.messages];
             if (blocks && blocks.length > 0) {
-              const html = blocksToHtml(blocks, p.hideThinking, p.thinkingStartTime);
+              const thinkId = nextThinkId(p.id, msgs.length - 1);
+              const html = blocksToHtml(blocks, p.hideThinking, p.thinkingStartTime, defaultCollapsed, thinkId);
               const lastMsg = msgs[msgs.length - 1];
               if (lastMsg && lastMsg.role === "assistant" && (!lastMsg.content || lastMsg.blocks)) {
                 msgs[msgs.length - 1] = { ...lastMsg, content: html, blocks, timestamp: lastMsg.timestamp };
@@ -470,13 +497,15 @@ export const usePanelStore = create<PanelState>((set, get) => {
       const panel = get().panels[index];
       if (!panel) return;
       const newHide = !panel.hideThinking;
+      const defaultCollapsed = useSettingsStore.getState().thinkingCollapsed;
       // Rebuild message HTML for all messages that have blocks
       set((s) => ({
         panels: s.panels.map((p, i) => {
           if (i !== index) return p;
-          const msgs = p.messages.map((m) => {
+          const msgs = p.messages.map((m, mi) => {
             if (m.blocks && m.blocks.length > 0) {
-              return { ...m, content: blocksToHtml(m.blocks, newHide) };
+              const thinkId = nextThinkId(p.id, mi);
+              return { ...m, content: blocksToHtml(m.blocks, newHide, null, defaultCollapsed, thinkId) };
             }
             return m;
           });
@@ -491,12 +520,14 @@ export const usePanelStore = create<PanelState>((set, get) => {
     setHideThinking: (index, hide) => {
       const panel = get().panels[index];
       if (!panel || panel.hideThinking === hide) return;
+      const defaultCollapsed = useSettingsStore.getState().thinkingCollapsed;
       set((s) => ({
         panels: s.panels.map((p, i) => {
           if (i !== index) return p;
-          const msgs = p.messages.map((m) => {
+          const msgs = p.messages.map((m, mi) => {
             if (m.blocks && m.blocks.length > 0) {
-              return { ...m, content: blocksToHtml(m.blocks, hide) };
+              const thinkId = nextThinkId(p.id, mi);
+              return { ...m, content: blocksToHtml(m.blocks, hide, null, defaultCollapsed, thinkId) };
             }
             return m;
           });
@@ -676,12 +707,16 @@ export const usePanelStore = create<PanelState>((set, get) => {
     flushThinking: (key) => {
       const panel = get().panels.find((p) => p.sessionKey === key);
       if (!panel || !panel.thinkingContent) return;
+      const defaultCollapsed = useSettingsStore.getState().thinkingCollapsed;
+      // Trim and normalize whitespace before finalising
+      const cleaned = panel.thinkingContent.replace(/^\s+/, '').replace(/\s+$/, '').replace(/\n{3,}/g, '\n\n');
+      if (!cleaned) return;
       set((s) => ({
         panels: s.panels.map((p) => {
           if (p.sessionKey !== key) return p;
           const thinkingMsg: MessageRecord = {
             role: "assistant",
-            content: createThinkingSectionRaw(p.thinkingContent),
+            content: createThinkingSectionRaw(cleaned, null, defaultCollapsed),
             timestamp: new Date().toISOString(),
           };
           return { ...p, messages: [...p.messages, thinkingMsg], thinkingContent: "" };
@@ -1208,28 +1243,31 @@ export const usePanelStore = create<PanelState>((set, get) => {
       }),
 
     closeLiveThinking: (key) =>
-      set((s) => ({
-        panels: s.panels.map((p) => {
-          if (p.sessionKey !== key) return p;
-          const msgs = [...p.messages];
-          const thinkTime = p.thinkingStartTime ? Math.round((Date.now() - p.thinkingStartTime) / 1000) : undefined;
-          for (let i = msgs.length - 1; i >= 0; i--) {
-            if (msgs[i].content.includes('data-live-thinking="true"')) {
-              const content = p.thinkingContent;
-              if (content) {
-                msgs[i] = {
-                  ...msgs[i],
-                  content: createThinkingSectionRaw(content, thinkTime != null ? String(thinkTime) : null, true),
-                };
-              } else {
-                msgs.splice(i, 1);
+      set((s) => {
+        const defaultCollapsed = useSettingsStore.getState().thinkingCollapsed;
+        return {
+          panels: s.panels.map((p) => {
+            if (p.sessionKey !== key) return p;
+            const msgs = [...p.messages];
+            const thinkTime = p.thinkingStartTime ? Math.round((Date.now() - p.thinkingStartTime) / 1000) : undefined;
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].content.includes('data-live-thinking="true"')) {
+                const content = p.thinkingContent;
+                if (content) {
+                  msgs[i] = {
+                    ...msgs[i],
+                    content: createThinkingSectionRaw(content, thinkTime != null ? String(thinkTime) : null, defaultCollapsed),
+                  };
+                } else {
+                  msgs.splice(i, 1);
+                }
+                break;
               }
-              break;
             }
-          }
-          return { ...p, messages: msgs, thinkingContent: "", thinkingStartTime: null };
-        }),
-      })),
+            return { ...p, messages: msgs, thinkingContent: "", thinkingStartTime: null };
+          }),
+        };
+      }),
 
     // ── Pinning ─────────────────────────────────────────
 
@@ -1276,7 +1314,7 @@ function findTextMsgIdx(msgs: MessageRecord[]): number {
 
 // ── Live thinking block renderer (streaming vs static) ──────
 
-function renderLiveThinking({ content, streaming, thinkingTime }: { content: string; streaming: boolean; thinkingTime?: string | null }): string {
+function renderLiveThinking({ content, streaming, thinkingTime }: { content: string; streaming: boolean; thinkingTime?: string | null; defaultCollapsed?: boolean }): string {
   const timeHtml = thinkingTime
     ? `<span class="thinking-time">${escapeHtml(thinkingTime)}s</span>`
     : '';
@@ -1350,32 +1388,11 @@ function renderSubAgentDone(id: string, task: string, result: string, usage?: { 
 
 // ── Blocks → HTML converter ─────────────────────────────
 
-/** Build HTML from content blocks during streaming (escaped, no markdown). */
-function streamingBlocksToHtml(blocks: ContentBlock[]): string {
-  if (!blocks || !blocks.length) return '';
-  let html = '';
-  for (const block of blocks) {
-    if (block.type === "thinking") {
-      html += `<div class="thinking-section" data-live-thinking="true">
-  <div class="thinking-header" data-pi-toggle="thinking" style="cursor:pointer">
-    <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
-    <span>Thinking…</span>
-    <span class="thinking-toggle" style="transform:none">▾</span>
-  </div>
-  <div class="thinking-content">
-    <div class="thinking-content-inner">${escapeHtml(block.content)}<span class="streaming-cursor">▊</span></div>
-  </div>
-</div>`;
-    } else {
-      html += escapeHtml(block.content);
-    }
-  }
-  html += '<span class="streaming-cursor">▊</span>';
-  return html;
-}
-
-/** Build HTML from content blocks (text + thinking). Respects hideThinking flag. */
-function blocksToHtml(blocks: ContentBlock[], hideThinking: boolean, thinkingStartTime?: number | null): string {
+/** Build HTML from content blocks (text + thinking). Respects hideThinking flag.
+ *  When hideThinking=false but defaultCollapsed=true, sections render collapsed
+ *  but the user can still expand them by clicking.
+ *  @param extraThinkId - optional panelId-msgIdx for toggle state tracking */
+function blocksToHtml(blocks: ContentBlock[], hideThinking: boolean, thinkingStartTime?: number | null, defaultCollapsed?: boolean, extraThinkId?: string): string {
   if (!blocks || !blocks.length) return '';
   let html = '';
   const thinkTime = thinkingStartTime ? Math.round((Date.now() - thinkingStartTime) / 1000) : undefined;
@@ -1383,30 +1400,22 @@ function blocksToHtml(blocks: ContentBlock[], hideThinking: boolean, thinkingSta
 
   for (const block of blocks) {
     if (block.type === "thinking") {
+      const thinkId = extraThinkId || nextThinkId(0, 0);
+      // Check if user has manually expanded this section
+      const manualExpanded = _manualExpandSet.has(thinkId);
+      // Default: collapsed when hideThinking true OR (visible but setting says collapse)
+      const startCollapsed = hideThinking || (!manualExpanded && !hideThinking && defaultCollapsed);
+      const collapsedClass = startCollapsed ? ' collapsed' : '';
+
+      // Trim and normalize whitespace in thinking content
+      const cleanContent = block.content.replace(/^\s+/, '').replace(/\s+$/, '').replace(/\n{3,}/g, '\n\n');
+
       if (hideThinking) {
-        // Hidden: show collapsed static label
-        html += `<div class="thinking-section collapsed">
-  <div class="thinking-header" data-pi-toggle="thinking">
-    <span>Thinking…</span>
-    ${timeStr ? `<span class="thinking-time">${escapeHtml(timeStr)}s</span>` : ''}
-    <span class="thinking-toggle">▸</span>
-  </div>
-  <div class="thinking-content">
-    <div class="thinking-content-inner">${escapeHtml(block.content)}</div>
-  </div>
-</div>`;
+        // Hidden: show collapsed static label (no inter-tag whitespace — parent uses whitespace-pre-wrap)
+        html += `<div class="thinking-section${collapsedClass}" data-think-id="${escapeHtml(thinkId)}"><div class="thinking-header" data-pi-toggle="thinking" data-think-id="${escapeHtml(thinkId)}"><span>Thinking…</span>${timeStr ? `<span class="thinking-time">${escapeHtml(timeStr)}s</span>` : ''}<span class="thinking-toggle">▸</span></div><div class="thinking-content"><div class="thinking-content-inner">${escapeHtml(cleanContent)}</div></div></div>`;
       } else {
-        // Visible: expanded
-        html += `<div class="thinking-section">
-  <div class="thinking-header" data-pi-toggle="thinking">
-    <span>View thinking process</span>
-    ${timeStr ? `<span class="thinking-time">${escapeHtml(timeStr)}s</span>` : ''}
-    <span class="thinking-toggle">▾</span>
-  </div>
-  <div class="thinking-content">
-    <div class="thinking-content-inner">${renderMarkdown(block.content)}</div>
-  </div>
-</div>`;
+        // Visible: collapsed by default if setting says so, or expanded if user toggled (no inter-tag whitespace)
+        html += `<div class="thinking-section${collapsedClass}" data-think-id="${escapeHtml(thinkId)}"><div class="thinking-header" data-pi-toggle="thinking" data-think-id="${escapeHtml(thinkId)}"><span>View thinking process</span>${timeStr ? `<span class="thinking-time">${escapeHtml(timeStr)}s</span>` : ''}<span class="thinking-toggle">▾</span></div><div class="thinking-content"><div class="thinking-content-inner">${renderMarkdown(cleanContent).trimEnd()}</div></div></div>`;
       }
     } else if (block.type === "text") {
       html += renderMarkdown(block.content);

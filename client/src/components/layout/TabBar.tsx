@@ -26,9 +26,12 @@ export function TabBar() {
   const runOnOtherModel = usePanelStore((s) => s.runOnOtherModel);
   const closeOtherPanels = usePanelStore((s) => s.closeOtherPanels);
   const closeAllPanels = usePanelStore((s) => s.closeAllPanels);
-  const { preset, setPreset } = useLayoutStore();
-  const { models, providers } = useModelStore();
-  const { open: workflowOpen, setOpen: setWorkflowOpen } = useWorkflowStore();
+  const preset = useLayoutStore((s) => s.preset);
+  const setPreset = useLayoutStore((s) => s.setPreset);
+  const models = useModelStore((s) => s.models);
+  const providers = useModelStore((s) => s.providers);
+  const workflowOpen = useWorkflowStore((s) => s.open);
+  const setWorkflowOpen = useWorkflowStore((s) => s.setOpen);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);

@@ -317,7 +317,8 @@ svg.lucide,
   transform: rotate(180deg);
 }
 .thinking-content {
-  overflow: hidden;
+  overflow-y: auto;
+  max-height: 60vh;
 }
 .thinking-section.collapsed .thinking-content {
   display: none;
@@ -329,6 +330,7 @@ svg.lucide,
   white-space: pre-wrap;
   line-height: 1.4;
 }
+.thinking-content-inner > :last-child { margin-bottom: 0; }
 /* Hide code copy buttons inside thinking — meta content, not user-facing */
 .thinking-section .copy-code-btn { display: none; }
 

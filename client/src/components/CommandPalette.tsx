@@ -8,7 +8,10 @@ import { timeAgo } from "../lib/time";
 export function CommandPalette() {
   const { query, setQuery, isOpen, close } = useSearchStore();
   const { workspaces } = useWorkspaceStore();
-  const { panels, activeIndex, setActive, openExistingSession } = usePanelStore();
+  const panels = usePanelStore((s) => s.panels);
+  const activeIndex = usePanelStore((s) => s.activeIndex);
+  const setActive = usePanelStore((s) => s.setActive);
+  const openExistingSession = usePanelStore((s) => s.openExistingSession);
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 

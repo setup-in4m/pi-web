@@ -9,7 +9,9 @@ import { ErrorBoundary } from "../ErrorBoundary";
 export function LayoutGrid() {
   const panels = usePanelStore((s) => s.panels);
   const activeIndex = usePanelStore((s) => s.activeIndex);
-  const { preset, savedSizes, saveSizes } = useLayoutStore();
+  const preset = useLayoutStore((s) => s.preset);
+  const savedSizes = useLayoutStore((s) => s.savedSizes);
+  const saveSizes = useLayoutStore((s) => s.saveSizes);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const n = panels.length;

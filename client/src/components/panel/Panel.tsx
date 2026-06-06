@@ -1,4 +1,5 @@
 import type { PanelData } from "../../stores/panelStore";
+import { memo } from "react";
 import { PanelHeader } from "./PanelHeader";
 import { ChatView } from "../chat/ChatView";
 import { Composer } from "../composer/Composer";
@@ -9,7 +10,7 @@ interface Props {
   panelIndex: number;
 }
 
-export function Panel({ panel, isActive, panelIndex }: Props) {
+export const Panel = memo(function Panel({ panel, isActive, panelIndex }: Props) {
   const hasWorkspace = !!panel.workspacePath;
 
   return (
@@ -22,4 +23,4 @@ export function Panel({ panel, isActive, panelIndex }: Props) {
       <Composer panelIndex={panelIndex} disabled={!hasWorkspace || panel.streaming} />
     </div>
   );
-}
+});

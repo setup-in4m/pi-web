@@ -9,7 +9,9 @@ export function useKeyboard() {
   const activeIndex = usePanelStore((s) => s.activeIndex);
   const setActive = usePanelStore((s) => s.setActive);
   const panels = usePanelStore((s) => s.panels);
-  const { setPreset, toggleSidebar, toggleFocusMode } = useLayoutStore();
+  const setPreset = useLayoutStore((s) => s.setPreset);
+  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
+  const toggleFocusMode = useLayoutStore((s) => s.toggleFocusMode);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

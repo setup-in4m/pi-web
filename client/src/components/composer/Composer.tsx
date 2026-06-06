@@ -31,11 +31,12 @@ const SLASH_COMMANDS: SlashCommand[] = [
 
 export function Composer({ panelIndex, disabled }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { createAndSend, sendMessage, panels } = usePanelStore();
-  const { models } = useModelStore();
-  const workspaceStore = useWorkspaceStore();
+  const createAndSend = usePanelStore((s) => s.createAndSend);
+  const sendMessage = usePanelStore((s) => s.sendMessage);
+  const panel = usePanelStore((s) => s.panels[panelIndex]);
+  const models = useModelStore((s) => s.models);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
   const addToast = useToastStore((s) => s.addToast);
-  const panel = panels[panelIndex];
 
   // Slash command state
   const [slashOpen, setSlashOpen] = useState(false);
@@ -188,7 +189,7 @@ export function Composer({ panelIndex, disabled }: Props) {
       return;
     }
     // Use workspace sessions + folder name as mentionable items
-    const ws = workspaceStore.workspaces.find((w) => w.path === panel.workspacePath);
+    const ws = workspaces.find((w) => w.path === panel.workspacePath);
     if (!ws) {
       setMentionItems([]);
       return;
@@ -201,7 +202,7 @@ export function Composer({ panelIndex, disabled }: Props) {
     // Add folder name
     items.push({ name: ws.name, type: "folder" });
     setMentionItems(items);
-  }, [panel?.workspacePath, workspaceStore.workspaces]);
+  }, [panel?.workspacePath, workspaces]);
 
   // ── Filtered commands ───────────────────────────────────
 
@@ -243,7 +244,7 @@ export function Composer({ panelIndex, disabled }: Props) {
         }
         case "/clear": {
           const panelIdx = panelIndex;
-          const oldMessages = panels[panelIdx]?.messages || [];
+          const oldMessages = usePanelStore.getState().panels[panelIdx]?.messages || [];
           usePanelStore.setState((s) => ({
             panels: s.panels.map((p, i) =>
               i === panelIdx ? { ...p, messages: [] } : p

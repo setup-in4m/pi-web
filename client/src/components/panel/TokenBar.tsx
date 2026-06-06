@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { AlertTriangle, Zap, Loader2 } from "lucide-react";
 import { compactSession } from "../../lib/api";
 import { useToastStore } from "../../stores/toastStore";
@@ -14,7 +14,7 @@ interface Props {
   onCompacted?: () => void;
 }
 
-export function TokenBar({ inputTokens, outputTokens, contextWindow, cost, streamingTokens, thinkingTokens, sessionKey, onCompacted }: Props) {
+export const TokenBar = memo(function TokenBar({ inputTokens, outputTokens, contextWindow, cost, streamingTokens, thinkingTokens, sessionKey, onCompacted }: Props) {
   const [compacting, setCompacting] = useState(false);
   const addToast = useToastStore((s) => s.addToast);
 
@@ -132,4 +132,4 @@ export function TokenBar({ inputTokens, outputTokens, contextWindow, cost, strea
       )}
     </div>
   );
-}
+});

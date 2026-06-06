@@ -1027,22 +1027,20 @@ export const usePanelStore = create<PanelState>((set, get) => {
         const startTime = panel.thinkingStartTime ?? Date.now();
         const elapsed = Math.round((Date.now() - startTime) / 1000);
         const thinkTimeStr = elapsed >= 1 ? String(elapsed) : null;
-        // Search for existing live thinking block
+        // Search ALL messages for existing live thinking block (not just last 5 — tool cards push it out of window)
         let existingIdx = -1;
-        for (let i = msgs.length - 1; i >= Math.max(0, msgs.length - 5); i--) {
+        for (let i = msgs.length - 1; i >= 0; i--) {
           if (msgs[i].content.includes('data-live-thinking="true"')) {
             existingIdx = i;
             break;
           }
         }
         if (existingIdx >= 0) {
-          // Update existing live thinking block with accumulated content
           msgs[existingIdx] = {
             ...msgs[existingIdx],
             content: renderLiveThinking({ content: accumulatedContent, streaming: true, thinkingTime: thinkTimeStr }),
           };
         } else {
-          // Create new live thinking block — insert BEFORE the plain-text message
           const textIdx = findTextMsgIdx(msgs);
           const thinkingMsg = {
             role: "assistant" as const,
@@ -1067,19 +1065,16 @@ export const usePanelStore = create<PanelState>((set, get) => {
         panels: s.panels.map((p) => {
           if (p.sessionKey !== key) return p;
           const msgs = [...p.messages];
-          const defaultCollapsed = localStorage.getItem("pi-web-thinking-collapsed") === "true";
           const thinkTime = p.thinkingStartTime ? Math.round((Date.now() - p.thinkingStartTime) / 1000) : undefined;
-          // Convert live thinking to static foldable block, but only if we have content
           for (let i = msgs.length - 1; i >= 0; i--) {
             if (msgs[i].content.includes('data-live-thinking="true"')) {
               const content = p.thinkingContent;
               if (content) {
                 msgs[i] = {
                   ...msgs[i],
-                  content: createThinkingSectionRaw(content, thinkTime != null ? String(thinkTime) : null, defaultCollapsed),
+                  content: createThinkingSectionRaw(content, thinkTime != null ? String(thinkTime) : null, true),
                 };
               } else {
-                // No thinking content — remove the placeholder
                 msgs.splice(i, 1);
               }
               break;

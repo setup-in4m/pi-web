@@ -19,6 +19,7 @@ interface ActiveSession {
   workspacePath: string;
   model: { provider: string; modelId: string } | null;
   thinking: string | null;
+  unsubscribe?: () => void;
 }
 
 const activeSessions = new Map<string, ActiveSession>();
@@ -186,6 +187,9 @@ export async function compact(key: string): Promise<{ tokensBefore: number; toke
 export async function close(key: string): Promise<void> {
   const entry = activeSessions.get(key);
   if (entry) {
+    if (entry.unsubscribe) {
+      try { entry.unsubscribe(); } catch {}
+    }
     try { (entry.runtime as any).dispose?.(); } catch {}
     activeSessions.delete(key);
   }
@@ -194,6 +198,9 @@ export async function close(key: string): Promise<void> {
 
 export function disposeAll(): void {
   for (const [, entry] of activeSessions) {
+    if (entry.unsubscribe) {
+      try { entry.unsubscribe(); } catch {}
+    }
     try { (entry.runtime as any).dispose?.(); } catch {}
   }
   activeSessions.clear();
@@ -242,7 +249,7 @@ export async function spawnSubAgent(
   if (subSession.subscribe) {
     let subResult = "";
 
-    subSession.subscribe((event: any) => {
+    const subUnsub = subSession.subscribe((event: any) => {
       const rich: any = {
         type: "session-event",
         sessionKey: parentKey,  // route to parent panel
@@ -285,6 +292,12 @@ export async function spawnSubAgent(
 
       broadcast(rich);
     });
+
+    // Store unsubscribe on sub-agent entry for cleanup
+    const subEntry = activeSessions.get(subKey);
+    if (subEntry && typeof subUnsub === "function") {
+      subEntry.unsubscribe = subUnsub;
+    }
   }
 
   // Send the task as first message
@@ -298,7 +311,10 @@ export async function spawnSubAgent(
 function subscribeSession(key: string, sessionId: string, session: any): void {
   if (!session.subscribe) return;
 
-  session.subscribe((event: any) => {
+  const entry = activeSessions.get(key);
+  if (!entry) return;
+
+  const unsubscribe = session.subscribe((event: any) => {
     const rich: any = {
       type: "session-event",
       sessionKey: key,
@@ -367,6 +383,15 @@ function subscribeSession(key: string, sessionId: string, session: any): void {
 
     broadcast(rich);
   });
+
+  // Store unsubscribe for cleanup on close
+  if (typeof unsubscribe === "function") {
+    entry.unsubscribe = unsubscribe;
+  } else if (unsubscribe && typeof (unsubscribe as any).dispose === "function") {
+    entry.unsubscribe = () => (unsubscribe as any).dispose();
+  } else if (unsubscribe && typeof (unsubscribe as any).unsubscribe === "function") {
+    entry.unsubscribe = () => (unsubscribe as any).unsubscribe();
+  }
 }
 
 function firstMsg(m: any): string | null {

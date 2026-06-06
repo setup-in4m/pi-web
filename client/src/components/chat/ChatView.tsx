@@ -498,6 +498,15 @@ export function ChatView({ panel, panelIndex }: Props) {
           })}
         </div>
 
+        {/* Waiting for first response — streaming but last message is user (no assistant yet) */}
+        {panel.streaming && panel.messages.length > 0 && panel.messages[panel.messages.length - 1]?.role === "user" && (
+          <div className="flex items-center gap-2 p-3">
+            <span className="w-1.5 h-1.5 bg-[var(--color-accent)] rounded-full animate-bounce" />
+            <span className="w-1.5 h-1.5 bg-[var(--color-accent)] rounded-full animate-bounce [animation-delay:0.15s]" />
+            <span className="w-1.5 h-1.5 bg-[var(--color-accent)] rounded-full animate-bounce [animation-delay:0.3s]" />
+            <span className="text-[10px] text-[var(--color-t3)] italic">Waiting for pi…</span>
+          </div>
+        )}
         {panel.streaming && panel.messages.length === 0 && (
           <div className="flex gap-1 p-3">
             <span className="w-1.5 h-1.5 bg-[var(--color-accent)] rounded-full animate-bounce" />

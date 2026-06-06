@@ -1,12 +1,14 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, Copy, Pencil, SendHorizontal, GitFork, Bot, Pin, RotateCcw, ArrowUp } from "lucide-react";
+import { ArrowDown, Copy, Pencil, SendHorizontal, GitFork, Bot, Pin, RotateCcw, ArrowUp, FolderOpen } from "lucide-react";
 import type { PanelData } from "../../stores/panelStore";
 import { usePanelStore } from "../../stores/panelStore";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { MessageBubble } from "./MessageBubble";
 import { ChatSkeleton } from "../Skeletons";
 import { useToastStore } from "../../stores/toastStore";
 import * as api from "../../lib/api";
+import { openFolder } from "../../lib/tauri";
 
 interface Props {
   panel: PanelData;
@@ -26,7 +28,10 @@ export function ChatView({ panel, panelIndex }: Props) {
   const pinMessage = usePanelStore((s) => s.pinMessage);
   const unpinMessage = usePanelStore((s) => s.unpinMessage);
   const regenLastMessage = usePanelStore((s) => s.regenLastMessage);
+  const stopStreaming = usePanelStore((s) => s.stopStreaming);
   const addToast = useToastStore((s) => s.addToast);
+  const addWorkspace = useWorkspaceStore((s) => s.addWorkspace);
+  const setWorkspace = usePanelStore((s) => s.setWorkspace);
   const [dragOver, setDragOver] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
   const elapsedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,6 +153,26 @@ export function ChatView({ panel, panelIndex }: Props) {
 
   // ── Load earlier messages ────────────────────────────────
 
+  const handleOpenFolder = useCallback(async () => {
+    const idx = panels.indexOf(panel);
+    if (idx < 0) return;
+    try {
+      const tauriPath = await openFolder();
+      if (tauriPath) {
+        await addWorkspace(tauriPath);
+        setWorkspace(idx, tauriPath);
+        return;
+      }
+      const manualPath = window.prompt("Enter folder path:", "");
+      if (manualPath && manualPath.trim()) {
+        await addWorkspace(manualPath.trim());
+        setWorkspace(idx, manualPath.trim());
+      }
+    } catch (e: any) {
+      addToast(e?.message || "Failed to open folder", "error");
+    }
+  }, [panel, panels, addToast, addWorkspace, setWorkspace]);
+
   const handleLoadEarlier = useCallback(async () => {
     if (!panel.sessionKey) return;
     addToast("Loading earlier messages…", "success");
@@ -234,6 +259,13 @@ export function ChatView({ panel, panelIndex }: Props) {
         <span className="text-[10px] max-w-[200px] leading-relaxed">
           Open a folder from the sidebar to start chatting with pi.
         </span>
+        <button
+          onClick={handleOpenFolder}
+          className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors"
+        >
+          <FolderOpen size={13} />
+          Open folder
+        </button>
       </div>
     );
   }
@@ -531,17 +563,8 @@ export function ChatView({ panel, panelIndex }: Props) {
             </button>
             <button
               onClick={() => {
-                // Stop: abort the stream
                 const panelIdx = panels.indexOf(panel);
-                if (panelIdx >= 0) {
-                  // Trigger a stop by sending an empty message or using a stop action
-                  // For now: just reset streaming state
-                  usePanelStore.setState((s) => ({
-                    panels: s.panels.map((p, i) =>
-                      i === panelIdx ? { ...p, streaming: false } : p
-                    ),
-                  }));
-                }
+                if (panelIdx >= 0) stopStreaming(panelIdx);
               }}
               className="text-[9px] text-[var(--color-danger)] hover:text-white hover:bg-[var(--color-danger)] px-2 py-0.5 rounded border border-[var(--color-danger)]/40 transition-colors"
             >

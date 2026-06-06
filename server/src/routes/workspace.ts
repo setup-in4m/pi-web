@@ -194,6 +194,17 @@ router.post("/session/:key/compact", async (req, res) => {
   }
 });
 
+// Stop/abort streaming
+router.post("/session/:key/stop", async (req, res) => {
+  try {
+    const key = decodeURIComponent(req.params.key);
+    await sessions.abort(key);
+    res.json({ ok: true });
+  } catch (e: any) {
+    sendError(res, e);
+  }
+});
+
 // Close session
 router.delete("/session/:key", async (req, res) => {
   try {

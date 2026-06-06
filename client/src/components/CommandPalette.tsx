@@ -3,6 +3,7 @@ import { Search, ArrowRight, Clock } from "lucide-react";
 import { useSearchStore } from "../stores/searchStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { usePanelStore } from "../stores/panelStore";
+import { timeAgo } from "../lib/time";
 
 export function CommandPalette() {
   const { query, setQuery, isOpen, close } = useSearchStore();
@@ -148,12 +149,4 @@ export function CommandPalette() {
       </div>
     </div>
   );
-}
-
-function timeAgo(dateStr: string): string {
-  const seconds = (Date.now() - new Date(dateStr).getTime()) / 1000;
-  if (seconds < 60) return "now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
 }

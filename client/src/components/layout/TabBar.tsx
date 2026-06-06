@@ -4,6 +4,7 @@ import { useLayoutStore, type LayoutPreset } from "../../stores/layoutStore";
 import { useModelStore } from "../../stores/modelStore";
 import { useWorkflowStore } from "../../stores/workflowStore";
 import { Plus, X, GripVertical, Square, Columns2, Rows2, Grid2x2, Columns3, Workflow } from "lucide-react";
+import { clampContextMenu } from "../../lib/clampMenu";
 
 const LAYOUT_OPTIONS: { preset: LayoutPreset; icon: typeof Square; label: string }[] = [
   { preset: "single", icon: Square, label: "Single" },
@@ -126,7 +127,8 @@ export function TabBar() {
 
   const handleContextMenu = (e: React.MouseEvent, index: number) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, index });
+    const pos = clampContextMenu(e.clientX, e.clientY, 180, 200);
+    setContextMenu({ x: pos.left, y: pos.top, index });
   };
 
   const getTabLabel = (p: typeof panels[0]) => {
@@ -176,7 +178,7 @@ export function TabBar() {
                 if (e.key === "Escape") { setEditingIndex(null); setEditDraft(""); }
               }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[var(--color-bg)] border border-[var(--color-accent)] rounded px-1 py-0 text-[10px] text-[var(--color-t1)] outline-none w-[140px]"
+              className="bg-[var(--color-bg)] border border-[var(--color-accent)] rounded px-1 py-0 text-[10px] text-[var(--color-t1)] outline-none w-[160px]"
             />
           ) : (
             <span

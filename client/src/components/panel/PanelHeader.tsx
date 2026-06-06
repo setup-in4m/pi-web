@@ -66,7 +66,7 @@ export function PanelHeader({ panel, panelIndex }: Props) {
         </span>
       )}
 
-      {/* Token bar — contextual */}
+      {/* Token bar — always rendered for layout stability */}
       <TokenBar
         inputTokens={panel.usage?.inputTokens}
         outputTokens={panel.usage?.outputTokens}

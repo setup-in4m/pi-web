@@ -146,6 +146,9 @@ export const spawnSubAgent = (key: string, task: string, options?: { model?: str
 export const getSessionUsage = (key: string) =>
   api.get<{ usage: UsageInfo }>(`/api/session/${encodeURIComponent(key)}/usage`);
 
+export const stopStreaming = (key: string) =>
+  api.post<{ ok: boolean }>(`/api/session/${encodeURIComponent(key)}/stop`);
+
 export const compactSession = (key: string) =>
   api.post<{ tokensBefore?: number; tokensAfter?: number; tokensRemoved?: number; message: string; error?: string }>(
     `/api/session/${encodeURIComponent(key)}/compact`

@@ -21,6 +21,7 @@ beforeEach(() => {
         streamingOutputTokens: 0,
         pinnedIndices: [],
         usage: null,
+        streamingTextIdx: null,
       },
     ],
     activeIndex: 0,

@@ -184,6 +184,14 @@ export async function compact(key: string): Promise<{ tokensBefore: number; toke
   };
 }
 
+export async function abort(key: string): Promise<void> {
+  const entry = activeSessions.get(key);
+  if (!entry) throw new Error("Session not loaded");
+  if (typeof (entry.session as any).abort === "function") {
+    await (entry.session as any).abort();
+  }
+}
+
 export async function close(key: string): Promise<void> {
   const entry = activeSessions.get(key);
   if (entry) {

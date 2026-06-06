@@ -168,6 +168,8 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     setFontScale: (fontScale) => {
       set({ fontScale });
       const s = get();
+      // Use CSS zoom for complete UI scaling (text, spacing, icons, everything)
+      document.documentElement.style.zoom = String(fontScale);
       document.documentElement.style.setProperty("--font-scale", String(fontScale));
       persist({ mode: s.mode, accent: s.accent, density: s.density, fontScale, fontFamily: s.fontFamily, uiFontFamily: s.uiFontFamily, codeTheme: s.codeTheme });
     },
@@ -211,6 +213,7 @@ function applyTheme(mode: ThemeMode, accent: AccentColor, density: Density, font
 
   document.documentElement.setAttribute("data-theme", resolved);
   document.documentElement.setAttribute("data-density", density);
+  document.documentElement.style.zoom = String(fontScale);
   document.documentElement.style.setProperty("--font-scale", String(fontScale));
 
   // Code font

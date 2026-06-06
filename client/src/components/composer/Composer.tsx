@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, useEffect, useMemo } from "react";
-import { Send, Command, Zap, Trash2, List, HelpCircle, AtSign, Mic, Palette, Type, Download } from "lucide-react";
+import { Send, Command, Zap, Trash2, List, HelpCircle, AtSign, Mic, MicOff, Palette, Type, Download } from "lucide-react";
 import { usePanelStore } from "../../stores/panelStore";
 import { useModelStore } from "../../stores/modelStore";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -48,7 +48,10 @@ export function Composer({ panelIndex, disabled }: Props) {
   const [mentionIdx, setMentionIdx] = useState(0);
   const [mentionItems, setMentionItems] = useState<{ name: string; type: "file" | "folder" | "session" }[]>([]);
 
-  // Character count
+  // Voice input state
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
   const [charCount, setCharCount] = useState(0);
 
   // Ctrl+K / Cmd+K to focus composer
@@ -69,6 +72,79 @@ export function Composer({ panelIndex, disabled }: Props) {
       ta.style.height = "auto";
       ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     }
+  }, []);
+
+  // ── Voice input via Web Speech API ───────────────────────
+  const toggleVoice = useCallback(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      addToast("Speech recognition not supported in this browser", "warning");
+      return;
+    }
+
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event: any) => {
+      let final = "";
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          final += transcript + " ";
+        } else {
+          interim += transcript;
+        }
+      }
+      const ta = textareaRef.current;
+      if (ta) {
+        if (final) {
+          ta.value = (ta.value + final).trim() + " ";
+        }
+        if (interim) {
+          const base = ta.value.replace(/\[…\]$/, "").trim();
+          ta.value = base + (base ? " " : "") + "[" + interim + "]";
+        }
+        adjustHeight();
+        setCharCount(ta.value.length);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+      if (event.error === "no-speech" || event.error === "aborted") return;
+      addToast(`Voice error: ${event.error}`, "error");
+      setListening(false);
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.value = ta.value.replace(/\s*\[([^\]]*)\]\s*$/, " $1").trim();
+        adjustHeight();
+        setCharCount(ta.value.length);
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+  }, [listening, adjustHeight, addToast]);
+
+  // Cleanup recognition on unmount
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+    };
   }, []);
 
   // ── Detect slash command trigger ────────────────────────
@@ -167,6 +243,7 @@ export function Composer({ panelIndex, disabled }: Props) {
         }
         case "/clear": {
           const panelIdx = panelIndex;
+          const oldMessages = panels[panelIdx]?.messages || [];
           usePanelStore.setState((s) => ({
             panels: s.panels.map((p, i) =>
               i === panelIdx ? { ...p, messages: [] } : p
@@ -174,7 +251,18 @@ export function Composer({ panelIndex, disabled }: Props) {
           }));
           ta.value = "";
           adjustHeight();
-          addToast("Chat cleared", "success");
+          addToast("Chat cleared", "success", {
+            action: {
+              label: "Undo",
+              onClick: () => {
+                usePanelStore.setState((s) => ({
+                  panels: s.panels.map((p, i) =>
+                    i === panelIdx ? { ...p, messages: oldMessages } : p
+                  ),
+                }));
+              },
+            },
+          });
           return;
         }
         case "/models": {
@@ -467,12 +555,16 @@ export function Composer({ panelIndex, disabled }: Props) {
           )}
         </div>
         <button
-          onClick={() => addToast("Voice input coming soon", "warning")}
+          onClick={toggleVoice}
           disabled={disabled}
-          className="w-[28px] h-[28px] text-[var(--color-t3)] hover:text-[var(--color-t2)] hover:bg-[var(--color-bgh)] disabled:opacity-25 rounded flex items-center justify-center transition-colors flex-shrink-0"
-          title="Voice input (coming soon)"
+          className={`w-[28px] h-[28px] rounded flex items-center justify-center transition-colors flex-shrink-0 ${
+            listening
+              ? "bg-[var(--color-danger)] text-white animate-pulse"
+              : "text-[var(--color-t3)] hover:text-[var(--color-t2)] hover:bg-[var(--color-bgh)]"
+          } disabled:opacity-25`}
+          title={listening ? "Stop listening" : "Voice input"}
         >
-          <Mic size={13} />
+          {listening ? <MicOff size={13} /> : <Mic size={13} />}
         </button>
         <button
           onClick={handleSend}

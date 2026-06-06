@@ -1,4 +1,5 @@
 import { useToastStore, type Toast } from "../stores/toastStore";
+import { useEffect } from "react";
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from "lucide-react";
 
 const ICONS = {
@@ -18,6 +19,18 @@ const BORDERS = {
 export function ToastContainer() {
   const { toasts, removeToast } = useToastStore();
 
+  // Dismiss latest toast on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        const latest = useToastStore.getState().toasts[useToastStore.getState().toasts.length - 1];
+        if (latest) removeToast(latest.id);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [removeToast]);
+
   if (toasts.length === 0) return null;
 
   return (
@@ -29,6 +42,14 @@ export function ToastContainer() {
         >
           {ICONS[toast.type]}
           <span className="flex-1 max-w-[300px] truncate">{toast.message}</span>
+          {toast.action && (
+            <button
+              onClick={() => { toast.action!.onClick(); removeToast(toast.id); }}
+              className="text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] text-[10px] font-medium flex-shrink-0 px-1"
+            >
+              {toast.action.label}
+            </button>
+          )}
           <button
             onClick={() => removeToast(toast.id)}
             className="text-[var(--color-t3)] hover:text-[var(--color-t1)] transition-colors flex-shrink-0"

@@ -213,6 +213,9 @@ svg.lucide,
   font-size: 0.85em;
   line-height: 1.5;
 }
+.code-block pre[data-lang] {
+  padding-top: 1.5rem;
+}
 .code-block pre[data-lang]::before {
   content: attr(data-lang);
   position: absolute;
@@ -263,6 +266,17 @@ svg.lucide,
   color: var(--color-t1);
   background: var(--color-bg3);
 }
+
+/* ── Visual hierarchy opacity (like pi CLI) ───────── */
+.thinking-section { opacity: 0.55; }
+.thinking-section:not(.collapsed) .thinking-content-inner { opacity: 0.75; }
+
+.tool-card { opacity: 0.65; }
+.tool-card[open] { opacity: 0.82; }
+.tool-card summary { color: var(--color-t3); }
+
+.sub-agent-card { opacity: 0.65; }
+.sub-agent-card[open] { opacity: 0.85; }
 
 /* ── Thinking sections (Odysseus-style) ────────────── */
 .thinking-section {
@@ -539,7 +553,8 @@ body,
   background: var(--color-bg);
   color: var(--color-t1);
   font-family: var(--font-sans);
-  font-size: calc(13px * var(--font-scale));
+  font-size: 13px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 /* Override Tailwind font utilities to use dynamic CSS variables */
@@ -700,11 +715,11 @@ pre[class*="language-"],
 /* Active panel border — applied to the Allotment pane itself so it renders above the sash */
 .split-view-view:has([data-panel-active]) {
   outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
+  outline-offset: -1px;
 }
-/* Rightmost / bottommost active panel: double the outer edge (clipped by viewport) */
+/* Rightmost / bottommost active panel: only reinforce outer edges not covered by sash */
 .split-view-view:last-child:has([data-panel-active]) {
-  box-shadow: inset -2px -2px 0 0 var(--color-accent);
+  box-shadow: inset -1px -1px 0 0 var(--color-accent);
 }
 
 /* Active panel: color the sash center line when adjacent */

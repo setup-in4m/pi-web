@@ -24,6 +24,7 @@ export interface PanelData {
   pinnedIndices: number[];          // indices of pinned messages
   stallTimer?: ReturnType<typeof setTimeout> | null;
   stallNotified?: boolean;
+  streamingTextIdx: number | null;  // index of the live plain-text message during streaming
 }
 
 interface PanelSlice {
@@ -115,7 +116,7 @@ function loadPersisted(): PanelSlice {
     panels: [{
       id: 1, workspacePath: null, sessionKey: null, sessionId: null,
       title: "", model: null, thinking: "off",
-      messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [],
+      messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingTextIdx: null,
     }],
     activeIndex: 0,
     nextId: 2,
@@ -295,7 +296,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         workspacePath: s.panels[s.activeIndex]?.workspacePath || null,
         sessionKey: null, sessionId: null, title: "",
         model: null, thinking: "off",
-        messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [],
+        messages: [], streaming: false, loadingMessages: false, thinkingContent: "", streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingTextIdx: null,
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -459,25 +460,36 @@ export const usePanelStore = create<PanelState>((set, get) => {
       }
     },
 
-    appendMessage: (key, message) =>
+    appendMessage: (key, message) => {
+      const panel = get().panels.find((p) => p.sessionKey === key);
+      // Insert infrastructure messages BEFORE the streaming text message
+      const textIdx = panel ? findTextMsgIdx(panel.messages) : -1;
       set((s) => ({
-        panels: s.panels.map((p) =>
-          p.sessionKey === key ? { ...p, messages: [...p.messages, message] } : p
-        ),
-      })),
+        panels: s.panels.map((p) => {
+          if (p.sessionKey !== key) return p;
+          const msgs = [...p.messages];
+          if (textIdx >= 0 && textIdx < msgs.length) {
+            msgs.splice(textIdx, 0, message);
+          } else {
+            msgs.push(message);
+          }
+          return { ...p, messages: msgs };
+        }),
+      }));
+    },
 
     updateLastAssistant: (key, content) =>
       set((s) => ({
         panels: s.panels.map((p) => {
           if (p.sessionKey !== key) return p;
           const msgs = [...p.messages];
-          const last = msgs[msgs.length - 1];
-          if (last && last.role === "assistant") {
-            msgs[msgs.length - 1] = { ...last, content: last.content + content };
+          const textIdx = findTextMsgIdx(msgs);
+          if (textIdx >= 0) {
+            msgs[textIdx] = { ...msgs[textIdx], content: msgs[textIdx].content + content };
           } else {
             msgs.push({ role: "assistant", content, timestamp: new Date().toISOString() });
           }
-          return { ...p, messages: msgs };
+          return { ...p, messages: msgs, streamingTextIdx: textIdx >= 0 ? textIdx : msgs.length - 1 };
         }),
       })),
 
@@ -486,13 +498,14 @@ export const usePanelStore = create<PanelState>((set, get) => {
         panels: s.panels.map((p) => {
           if (p.sessionKey !== key) return p;
           const msgs = [...p.messages];
-          const last = msgs[msgs.length - 1];
-          if (last && last.role === "assistant") {
-            msgs[msgs.length - 1] = { ...last, content };
+          const textIdx = findTextMsgIdx(msgs);
+          if (textIdx >= 0) {
+            msgs[textIdx] = { ...msgs[textIdx], content };
           } else {
             msgs.push({ role: "assistant", content, timestamp: new Date().toISOString() });
           }
-          return { ...p, messages: msgs };
+          const newTextIdx = textIdx >= 0 ? textIdx : msgs.length - 1;
+          return { ...p, messages: msgs, streamingTextIdx: newTextIdx };
         }),
       })),
 
@@ -584,6 +597,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         thinkingTokens: 0,
         usage: null,
         pinnedIndices: [],
+        streamingTextIdx: null,
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -624,6 +638,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         thinkingTokens: 0,
         usage: null,
         pinnedIndices: [],
+        streamingTextIdx: null,
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -690,6 +705,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         thinkingTokens: 0,
         usage: null,
         pinnedIndices: [],
+        streamingTextIdx: null,
       };
       const next: PanelSlice = { panels: [panel], activeIndex: 0, nextId: s.nextId + 1 };
       set(next);
@@ -728,6 +744,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         thinkingTokens: 0,
         usage: null,
         pinnedIndices: [],
+        streamingTextIdx: null,
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -880,14 +897,19 @@ export const usePanelStore = create<PanelState>((set, get) => {
 
     // ── Stop Streaming (with continue option) ──────────
 
-    stopStreaming: (index) => {
+    stopStreaming: async (index) => {
       const panel = get().panels[index];
       if (!panel?.streaming) return;
+
+      // Call server to abort
+      if (panel.sessionKey) {
+        api.stopStreaming(panel.sessionKey).catch(() => {});
+      }
+
       const msgs = [...panel.messages];
       const last = msgs[msgs.length - 1];
       if (last && last.role === "assistant" && last.content) {
         const lastContent = last.content;
-        // Append stopped indicator with Continue button
         const plain = (() => { const d = document.createElement("div"); d.innerHTML = lastContent; return (d.textContent || "").slice(-500); })();
         msgs.push({
           role: "assistant",
@@ -997,9 +1019,9 @@ export const usePanelStore = create<PanelState>((set, get) => {
         const panel = s.panels.find((p) => p.sessionKey === key);
         if (!panel) return s;
         const msgs = [...panel.messages];
-        // Search for the live thinking marker in the last few messages
+        // Search for existing live thinking block
         let existingIdx = -1;
-        for (let i = msgs.length - 1; i >= Math.max(0, msgs.length - 3); i--) {
+        for (let i = msgs.length - 1; i >= Math.max(0, msgs.length - 5); i--) {
           if (msgs[i].content.includes('data-live-thinking="true"')) {
             existingIdx = i;
             break;
@@ -1012,12 +1034,18 @@ export const usePanelStore = create<PanelState>((set, get) => {
             content: renderLiveThinking({ content: thinkingContent, streaming: true }),
           };
         } else {
-          // Create new live thinking block
-          msgs.push({
-            role: "assistant",
+          // Create new live thinking block — insert BEFORE the plain-text message
+          const textIdx = findTextMsgIdx(msgs);
+          const thinkingMsg = {
+            role: "assistant" as const,
             content: renderLiveThinking({ content: thinkingContent, streaming: true }),
             timestamp: new Date().toISOString(),
-          });
+          };
+          if (textIdx >= 0) {
+            msgs.splice(textIdx, 0, thinkingMsg);
+          } else {
+            msgs.push(thinkingMsg);
+          }
         }
         return {
           panels: s.panels.map((p) =>
@@ -1072,6 +1100,25 @@ export const usePanelStore = create<PanelState>((set, get) => {
       })),
   };
 });
+
+// ── Infrastructure message detection ──────────────────
+
+function isInfrastructureMsg(content: string): boolean {
+  return content.includes('thinking-section') ||
+         content.includes('tool-card') ||
+         content.includes('sub-agent-card') ||
+         content.includes('data-live-thinking');
+}
+
+/** Find the last plain-text assistant message index, or -1 if none */
+function findTextMsgIdx(msgs: MessageRecord[]): number {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'assistant' && !isInfrastructureMsg(msgs[i].content)) {
+      return i;
+    }
+  }
+  return -1;
+}
 
 // ── Sub-agent card renderers ─────────────────────────────
 

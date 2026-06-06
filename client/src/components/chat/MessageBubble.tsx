@@ -1,6 +1,7 @@
 import { useMemo, useCallback, useState, useEffect } from "react";
 import type { MessageRecord } from "../../lib/api";
 import { renderMarkdown, escapeHtml } from "../../lib/markdown";
+import { formatTime } from "../../lib/time";
 import { useModelStore } from "../../stores/modelStore";
 import { usePanelStore } from "../../stores/panelStore";
 
@@ -84,10 +85,23 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
 
   const formatted = useMemo(() => {
     if (isUser) return formatSimple(message.content);
+
+    // Infrastructure messages (thinking, tool cards, sub-agents) — render HTML as-is
+    const isInfra =
+      message.content.includes('thinking-section') ||
+      message.content.includes('tool-card') ||
+      message.content.includes('sub-agent-card') ||
+      message.content.includes('data-live-thinking');
+
+    if (isInfra) {
+      return message.content; // raw HTML from our own renderers, safe
+    }
+
     if (streaming) {
-      // Fast path during streaming: escape HTML only, no markdown parse
+      // Plain text streaming — fast path: escape HTML, convert newlines
       return escapeHtml(message.content).replace(/\n/g, '<br>');
     }
+
     return renderMarkdown(message.content);
   }, [message.content, isUser, streaming]);
 
@@ -231,12 +245,6 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
       </div>
     </div>
   );
-}
-
-function formatTime(ts: string): string {
-  if (!ts) return "";
-  try { return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
-  catch { return ""; }
 }
 
 function formatSimple(text: string): string {

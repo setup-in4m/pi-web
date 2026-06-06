@@ -52,7 +52,7 @@ export function TokenBar({ inputTokens, outputTokens, contextWindow, cost, strea
     }
   };
 
-  if (!total && !cost && !streamingTokens) return null;
+  if (!total && !cost && !streamingTokens && !thinkingTokens) return null;
 
   return (
     <div className="flex items-center gap-1.5 text-[8px] text-[var(--color-t3)] flex-shrink-0">

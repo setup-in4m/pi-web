@@ -171,10 +171,19 @@ export function SettingsDialog({ open, onClose }: Props) {
   const [newProfileModel, setNewProfileModel] = useState("");
   const [newProfileThinking, setNewProfileThinking] = useState("off");
   const [activeTab, setActiveTab] = useState<"appearance" | "models" | "shortcuts" | "profiles" | "data" | "extensions">("appearance");
+  const [closing, setClosing] = useState(false);
   const { keybindings, setKeybinding, resetKeybindings } = useSettingsStore();
   const [editingAction, setEditingAction] = useState<string | null>(null);
   const addToast = useToastStore((s) => s.addToast);
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  const handleClose = () => {
+    setClosing(true);
+    setTimeout(() => {
+      setClosing(false);
+      onClose();
+    }, 150);
+  };
 
   // Focus trap + Escape handler
   useEffect(() => {
@@ -191,7 +200,7 @@ export function SettingsDialog({ open, onClose }: Props) {
 
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        handleClose();
         return;
       }
       if (e.key !== "Tab") return;
@@ -221,20 +230,22 @@ export function SettingsDialog({ open, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+    <div className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-150 ${closing ? "opacity-0" : "opacity-100"}`}>
+      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
       <div className="relative w-[520px] max-h-[80vh] bg-[var(--color-bg2)] border border-[var(--color-bdl)] rounded-xl shadow-2xl flex flex-col overflow-hidden z-10" ref={dialogRef} role="dialog" aria-modal="true" aria-label="Settings">
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-bd)] flex-shrink-0">
           <Settings size={16} className="text-[var(--color-accent)]" />
           <span className="text-sm font-semibold">Settings</span>
-          <button onClick={onClose} className="ml-auto text-[var(--color-t3)] hover:text-[var(--color-t1)] transition-colors">
+          <button onClick={handleClose} className="ml-auto text-[var(--color-t3)] hover:text-[var(--color-t1)] transition-colors">
             <X size={16} />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[var(--color-bd)] px-4 flex-shrink-0 overflow-x-auto">
+        <div className="flex border-b border-[var(--color-bd)] px-4 flex-shrink-0 overflow-x-auto relative">
+          {/* Scroll fade indicator (right) */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[var(--color-bg2)] to-transparent z-10" />
           {(["appearance", "models", "shortcuts", "profiles", "data", "extensions"] as const).map((tab) => (
             <button
               key={tab}

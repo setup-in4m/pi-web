@@ -88,12 +88,17 @@ export function ChatView({ panel, panelIndex }: Props) {
     prevMsgCount.current = panel.messages.length;
   }, [panel.streaming, panel.messages.length]);
 
-  // Auto-scroll when streaming
+  // Track last message content size to auto-scroll during text streaming
+  // (content grows without messages.length changing → need size-based trigger)
+  const lastMsg = panel.messages[panel.messages.length - 1];
+  const lastContentLen = lastMsg ? lastMsg.content.length : 0;
+
+  // Auto-scroll when streaming (fires on new messages AND content growth)
   useEffect(() => {
     if (panel.streaming && shouldAutoScroll.current && panel.messages.length > 0) {
       virtualizer.scrollToIndex(panel.messages.length - 1, { align: "end" });
     }
-  }, [panel.messages.length, panel.streaming, virtualizer]);
+  }, [panel.messages.length, lastContentLen, panel.streaming, virtualizer]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;

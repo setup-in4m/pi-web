@@ -1,0 +1,1 @@
+{"root":["./src/config.ts","./src/index.ts","./src/store.ts","./src/routes/browse.ts","./src/routes/data.ts","./src/routes/extensions.ts","./src/routes/info.ts","./src/routes/models.ts","./src/routes/subagent.ts","./src/routes/workspace.ts","./src/services/sessionstore.ts","./src/ws/handler.ts"],"version":"5.9.3"}

@@ -420,29 +420,32 @@ export function createThinkingSectionRaw(thinkingContent: string, thinkingTime?:
 </div>`;
 }
 
-export function renderMarkdown(text: string): string {
-  // Check cache
-  const cached = cache.get(text);
-  if (cached) {
-    cacheHits++;
-    // Move to end (LRU: refresh timestamp)
-    cached.ts = Date.now();
-    return cached.result;
-  }
+export function renderMarkdown(text: string, opts?: { skipCache?: boolean }): string {
+  const skipCache = opts?.skipCache;
 
-  cacheMisses++;
-
-  // Evict oldest if at capacity
-  if (cache.size >= CACHE_MAX) {
-    let oldestKey = "";
-    let oldestTs = Infinity;
-    for (const [k, v] of cache) {
-      if (v.ts < oldestTs) {
-        oldestTs = v.ts;
-        oldestKey = k;
-      }
+  // Check cache (skip during streaming — every string is unique, cache is pure overhead)
+  if (!skipCache) {
+    const cached = cache.get(text);
+    if (cached) {
+      cacheHits++;
+      // Move to end (LRU: refresh timestamp)
+      cached.ts = Date.now();
+      return cached.result;
     }
-    if (oldestKey) cache.delete(oldestKey);
+    cacheMisses++;
+
+    // Evict oldest if at capacity
+    if (cache.size >= CACHE_MAX) {
+      let oldestKey = "";
+      let oldestTs = Infinity;
+      for (const [k, v] of cache) {
+        if (v.ts < oldestTs) {
+          oldestTs = v.ts;
+          oldestKey = k;
+        }
+      }
+      if (oldestKey) cache.delete(oldestKey);
+    }
   }
 
   // Pre-process: strip leaked tool syntax, squash unclosed code fences
@@ -478,7 +481,9 @@ export function renderMarkdown(text: string): string {
     result = escapeHtml(processed).replace(/\n/g, "<br>");
   }
 
-  cache.set(text, { result, ts: Date.now() });
+  if (!skipCache) {
+    cache.set(text, { result, ts: Date.now() });
+  }
   return result;
 }
 

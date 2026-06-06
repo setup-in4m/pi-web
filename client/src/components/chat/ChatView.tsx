@@ -36,9 +36,16 @@ export function ChatView({ panel, panelIndex }: Props) {
   const [elapsedSec, setElapsedSec] = useState(0);
   const elapsedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Safe accessors — panel might be undefined during hot reload / initial render
+  const msgs = panel?.messages ?? [];
+  const isStreaming = panel?.streaming ?? false;
+  const isLoading = panel?.loadingMessages ?? false;
+  const hasWorkspace = !!panel?.workspacePath;
+  const sessionKey = panel?.sessionKey;
+
   // ── Elapsed time counter during streaming ──────────────
   useEffect(() => {
-    if (panel.streaming) {
+    if (isStreaming) {
       setElapsedSec(0);
       elapsedRef.current = setInterval(() => {
         setElapsedSec((s) => s + 1);
@@ -56,32 +63,32 @@ export function ChatView({ panel, panelIndex }: Props) {
         elapsedRef.current = null;
       }
     };
-  }, [panel.streaming]);
+  }, [isStreaming]);
 
   const virtualizer = useVirtualizer({
-    count: panel.messages.length,
+    count: msgs.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 200,
     overscan: 5,
   });
 
   const scrollToBottom = useCallback(() => {
-    virtualizer.scrollToIndex(panel.messages.length - 1, { align: "end" });
+    virtualizer.scrollToIndex(msgs.length - 1, { align: "end" });
     shouldAutoScroll.current = true;
     setShowScrollBtn(false);
-  }, [virtualizer, panel.messages.length]);
+  }, [virtualizer, msgs.length]);
 
   // aria-live announcements for screen readers
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
-  const prevStreaming = useRef(panel.streaming);
-  const prevMsgCount = useRef(panel.messages.length);
+  const prevStreaming = useRef(isStreaming);
+  const prevMsgCount = useRef(msgs.length);
 
   useEffect(() => {
-    if (panel.streaming && !prevStreaming.current) {
+    if (isStreaming && !prevStreaming.current) {
       setLiveAnnouncement("New message from pi");
-    } else if (!panel.streaming && prevStreaming.current) {
+    } else if (!isStreaming && prevStreaming.current) {
       setLiveAnnouncement("Message complete");
-    } else if (panel.messages.length > prevMsgCount.current && !panel.streaming) {
+    } else if (msgs.length > prevMsgCount.current && !isStreaming) {
       // User sent a message
       setLiveAnnouncement("Message sent");
     } else {
@@ -89,28 +96,28 @@ export function ChatView({ panel, panelIndex }: Props) {
       const timer = setTimeout(() => setLiveAnnouncement(""), 100);
       return () => clearTimeout(timer);
     }
-    prevStreaming.current = panel.streaming;
-    prevMsgCount.current = panel.messages.length;
-  }, [panel.streaming, panel.messages.length]);
+    prevStreaming.current = isStreaming;
+    prevMsgCount.current = msgs.length;
+  }, [isStreaming, msgs.length]);
 
   // Track last message content size to auto-scroll during text streaming
   // (content grows without messages.length changing → need size-based trigger)
-  const lastMsg = panel.messages[panel.messages.length - 1];
+  const lastMsg = msgs[msgs.length - 1];
   const lastContentLen = lastMsg?.content?.length ?? 0;
 
   // Auto-scroll when streaming (fires on new messages AND content growth)
   useEffect(() => {
-    if (panel.streaming && shouldAutoScroll.current && panel.messages.length > 0) {
-      virtualizer.scrollToIndex(panel.messages.length - 1, { align: "end" });
+    if (isStreaming && shouldAutoScroll.current && msgs.length > 0) {
+      virtualizer.scrollToIndex(msgs.length - 1, { align: "end" });
     }
-  }, [panel.messages.length, lastContentLen, panel.streaming, virtualizer]);
+  }, [msgs.length, lastContentLen, isStreaming, virtualizer]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const el = scrollRef.current;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     shouldAutoScroll.current = atBottom;
-    setShowScrollBtn(!atBottom && panel.messages.length > 2);
+    setShowScrollBtn(!atBottom && msgs.length > 2);
   };
 
   const handleCopyMessage = (content: string) => {
@@ -134,10 +141,10 @@ export function ChatView({ panel, panelIndex }: Props) {
     const panelIndex = usePanelStore.getState().panels.indexOf(panel);
     if (panelIndex < 0) return;
 
-    const msgs = panel.messages.slice(0, editingIndex);
+    const prevMsgs = msgs.slice(0, editingIndex);
     usePanelStore.setState((s) => ({
       panels: s.panels.map((p, i) =>
-        i === panelIndex ? { ...p, messages: msgs } : p
+        i === panelIndex ? { ...p, messages: prevMsgs } : p
       ),
     }));
 
@@ -174,12 +181,12 @@ export function ChatView({ panel, panelIndex }: Props) {
   }, [panel, panels, addToast, addWorkspace, setWorkspace]);
 
   const handleLoadEarlier = useCallback(async () => {
-    if (!panel.sessionKey) return;
+    if (!sessionKey) return;
     addToast("Loading earlier messages…", "success");
     // Re-fetch full transcript (server-side pagination not yet implemented,
     // this refreshes the entire transcript as a fallback)
     try {
-      const transcript = await api.getTranscript(panel.sessionKey);
+      const transcript = await api.getTranscript(sessionKey);
       const panelIdx = panels.indexOf(panel);
       if (panelIdx >= 0) {
         usePanelStore.setState((s) => ({
@@ -194,7 +201,7 @@ export function ChatView({ panel, panelIndex }: Props) {
     } catch {
       addToast("Failed to load messages", "error");
     }
-  }, [panel.sessionKey, panel, panels, addToast]);
+  }, [sessionKey, panel, panels, addToast]);
 
   // ── Drag-drop handlers ───────────────────────────────────
 
@@ -247,11 +254,11 @@ export function ChatView({ panel, panelIndex }: Props) {
     }
   }, [panels, panel, regenLastMessage, addToast]);
 
-  if (panel.loadingMessages) {
+  if (isLoading) {
     return <ChatSkeleton />;
   }
 
-  if (!panel.workspacePath) {
+  if (!hasWorkspace) {
     const hasOtherWorkspace = panels.some((p) => p !== panel && p.workspacePath);
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center gap-1.5 text-[var(--color-t3)] px-4">
@@ -277,7 +284,7 @@ export function ChatView({ panel, panelIndex }: Props) {
     );
   }
 
-  if (panel.messages.length === 0 && !panel.streaming) {
+  if (msgs.length === 0 && !isStreaming) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center gap-1.5 text-[var(--color-t3)] px-4">
         <span className="text-2xl opacity-25">💬</span>
@@ -316,7 +323,7 @@ export function ChatView({ panel, panelIndex }: Props) {
         className="absolute inset-0 overflow-y-auto"
       >
         {/* ── Load earlier messages ────────────────────────── */}
-        {panel.messages.length > 20 && !panel.loadingMessages && (
+        {msgs.length > 20 && !isLoading && (
           <div className="flex justify-center pt-2 pb-1">
             <button
               onClick={handleLoadEarlier}
@@ -330,14 +337,14 @@ export function ChatView({ panel, panelIndex }: Props) {
         )}
 
         {/* Pinned messages */}
-        {panel.pinnedIndices && panel.pinnedIndices.length > 0 && (
+        {panel?.pinnedIndices && panel.pinnedIndices.length > 0 && (
           <div className="sticky top-0 z-10 bg-[var(--color-bg)]/95 backdrop-blur-sm border-b border-[var(--color-accent)]/30 px-3 py-1.5 mb-1">
             <div className="text-[9px] text-[var(--color-t3)] uppercase tracking-wider mb-1 flex items-center gap-1">
               <Pin size={9} />
               Pinned ({panel.pinnedIndices.length})
             </div>
             {panel.pinnedIndices.map((idx) => {
-              const msg = panel.messages[idx];
+              const msg = msgs[idx];
               if (!msg) return null;
               return (
                 <div key={idx} className="relative group/pinned mb-1">
@@ -366,13 +373,13 @@ export function ChatView({ panel, panelIndex }: Props) {
         >
           {virtualizer.getVirtualItems().map((virtualItem) => {
             const i = virtualItem.index;
-            const msg = panel.messages[i];
-            const isStreaming = panel.streaming && i === panel.messages.length - 1 && msg.role === "assistant";
+            const msg = msgs[i];
+            const msgIsStreaming = isStreaming && i === msgs.length - 1 && msg.role === "assistant";
             const isEditing = editingIndex === i;
             const isLastAssistant =
               msg.role === "assistant" &&
-              i === panel.messages.length - 1 &&
-              !panel.streaming;
+              i === msgs.length - 1 &&
+              !isStreaming;
 
             return (
               <div
@@ -415,12 +422,12 @@ export function ChatView({ panel, panelIndex }: Props) {
                   ) : (
                     <MessageBubble
                       message={msg}
-                      streaming={isStreaming}
+                      streaming={msgIsStreaming}
                       panelIndex={panelIndex}
                     />
                   )}
 
-                  {!isEditing && !panel.streaming && (
+                  {!isEditing && !isStreaming && (
                     <div className="absolute bottom-0 right-0 opacity-0 group-hover/message:opacity-100 transition-opacity flex gap-0.5 pb-1">
                       <button
                         onClick={() => handleCopyMessage(msg.content)}
@@ -440,7 +447,7 @@ export function ChatView({ panel, panelIndex }: Props) {
                           <Pencil size={11} aria-hidden="true" />
                         </button>
                       )}
-                      {msg.role === "assistant" && panels.length > 1 && !panel.streaming && (
+                      {msg.role === "assistant" && panels.length > 1 && !isStreaming && (
                         <button
                           onClick={() => {
                             const text = document.createElement("div");
@@ -475,7 +482,7 @@ export function ChatView({ panel, panelIndex }: Props) {
                       >
                         <GitFork size={11} aria-hidden="true" />
                       </button>
-                      {msg.role === "assistant" && panel.sessionKey && (
+                      {msg.role === "assistant" && sessionKey && (
                         <button
                           onClick={() => {
                             const text = document.createElement("div");
@@ -492,7 +499,7 @@ export function ChatView({ panel, panelIndex }: Props) {
                           <Bot size={11} aria-hidden="true" />
                         </button>
                       )}
-                      {isLastAssistant && panel.sessionKey && (
+                      {isLastAssistant && sessionKey && (
                         <button
                           onClick={handleRegenLast}
                           className="p-0.5 rounded bg-[var(--color-bg2)]/90 border border-[var(--color-bdl)] text-[var(--color-t3)] hover:text-[#22c55e] hover:bg-[var(--color-bgh)] transition-colors"
@@ -531,7 +538,7 @@ export function ChatView({ panel, panelIndex }: Props) {
         </div>
 
         {/* Waiting for first response — streaming but last message is user (no assistant yet) */}
-        {panel.streaming && panel.messages.length > 0 && panel.messages[panel.messages.length - 1]?.role === "user" && (
+        {isStreaming && msgs.length > 0 && msgs[msgs.length - 1]?.role === "user" && (
           <div className="flex items-center gap-2 p-3">
             <span className="w-1.5 h-1.5 bg-[var(--color-accent)] rounded-full animate-bounce" />
             <span className="w-1.5 h-1.5 bg-[var(--color-accent)] rounded-full animate-bounce [animation-delay:0.15s]" />
@@ -539,7 +546,7 @@ export function ChatView({ panel, panelIndex }: Props) {
             <span className="text-[10px] text-[var(--color-t3)] italic">Waiting for pi…</span>
           </div>
         )}
-        {panel.streaming && panel.messages.length === 0 && (
+        {isStreaming && msgs.length === 0 && (
           <div className="flex gap-1 p-3">
             <span className="w-1.5 h-1.5 bg-[var(--color-accent)] rounded-full animate-bounce" />
             <span className="w-1.5 h-1.5 bg-[var(--color-accent)] rounded-full animate-bounce [animation-delay:0.15s]" />
@@ -549,7 +556,7 @@ export function ChatView({ panel, panelIndex }: Props) {
       </div>
 
       {/* ── Stall banner ──────────────────────────────────── */}
-      {panel.streaming && elapsedSec > 45 && (
+      {isStreaming && elapsedSec > 45 && (
         <div className="absolute bottom-10 left-3 right-3 z-20 bg-[var(--color-bg2)] border border-[var(--color-warning)]/40 rounded-lg px-3 py-2 shadow-lg animate-[fadeIn_0.2s_ease]">
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-[var(--color-warning)]">
@@ -582,7 +589,7 @@ export function ChatView({ panel, panelIndex }: Props) {
       )}
 
       {/* ── Streaming elapsed indicator ──────────────────── */}
-      {panel.streaming && elapsedSec > 5 && (
+      {isStreaming && elapsedSec > 5 && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-2 py-0.5 rounded-full bg-[var(--color-bg2)]/90 border border-[var(--color-bd)] text-[9px] text-[var(--color-t3)] shadow-sm backdrop-blur-sm animate-[fadeIn_0.3s_ease]">
           Generating… {elapsedSec}s
         </div>

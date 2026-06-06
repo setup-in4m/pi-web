@@ -4,7 +4,7 @@ import { useModelStore } from "../../stores/modelStore";
 import { TokenBar } from "./TokenBar";
 import { ProfileSelector } from "./ProfileSelector";
 import { ModelSelector } from "./ModelSelector";
-import { Download, Copy, FileText, Code, ChevronDown, Share2 } from "lucide-react";
+import { Download, Copy, FileText, Code, ChevronDown, Share2, Eye, EyeOff } from "lucide-react";
 import { useToastStore } from "../../stores/toastStore";
 import { useState, useRef, useCallback } from "react";
 
@@ -16,6 +16,7 @@ interface Props {
 export function PanelHeader({ panel, panelIndex }: Props) {
   const setModel = usePanelStore((s) => s.setModel);
   const setThinking = usePanelStore((s) => s.setThinking);
+  const toggleHideThinking = usePanelStore((s) => s.toggleHideThinking);
   const { models, providers, recentModels, addRecentModel } = useModelStore();
   const addToast = useToastStore((s) => s.addToast);
   const setTitle = usePanelStore((s) => s.setTitle);
@@ -199,6 +200,18 @@ export function PanelHeader({ panel, panelIndex }: Props) {
                 <option value="medium">med</option>
                 <option value="high">high</option>
               </select>
+              <button
+                onClick={() => toggleHideThinking(panelIndex)}
+                className={`p-0.5 rounded text-[11px] transition-colors ${
+                  panel.hideThinking
+                    ? "text-[var(--color-t3)] hover:text-[var(--color-t2)]"
+                    : "text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
+                }`}
+                title={panel.hideThinking ? "Show thinking blocks" : "Hide thinking blocks"}
+                aria-label={panel.hideThinking ? "Show thinking" : "Hide thinking"}
+              >
+                {panel.hideThinking ? <EyeOff size={11} /> : <Eye size={11} />}
+              </button>
             </div>
           </>
         )}

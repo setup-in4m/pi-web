@@ -69,7 +69,12 @@ export async function open(workspacePath: string, sessionId: string): Promise<{ 
   return { key, title: info.name || "(untitled)", messageCount: msgs.length, usage };
 }
 
-export async function create(workspacePath: string, title?: string): Promise<{ sessionId: string; key: string; title: string }> {
+export async function create(
+  workspacePath: string,
+  title?: string,
+  model?: { provider: string; modelId: string } | null,
+  thinking?: string | null
+): Promise<{ sessionId: string; key: string; title: string }> {
   const sm = SessionManager.create(workspacePath);
   const runtime = await createAgentSession(buildSessionConfig({
     cwd: workspacePath,
@@ -85,7 +90,25 @@ export async function create(workspacePath: string, title?: string): Promise<{ s
     (session as any).setSessionName(title);
   }
 
-  const entry: ActiveSession = { runtime, session, workspacePath, model: null, thinking: null };
+  // Apply model if provided
+  if (model && model.provider && model.modelId && (session as any).setModel) {
+    try {
+      (session as any).setModel(model.provider, model.modelId);
+    } catch (e) {
+      console.error("Failed to set model on new session:", e);
+    }
+  }
+
+  // Apply thinking level if provided
+  if (thinking && (session as any).setThinkingLevel) {
+    try {
+      (session as any).setThinkingLevel(thinking);
+    } catch (e) {
+      console.error("Failed to set thinking on new session:", e);
+    }
+  }
+
+  const entry: ActiveSession = { runtime, session, workspacePath, model: model || null, thinking: thinking || null };
   activeSessions.set(key, entry);
 
   subscribeSession(key, sessionId, session as any);
@@ -93,6 +116,8 @@ export async function create(workspacePath: string, title?: string): Promise<{ s
   store.upsertSession({
     key, workspacePath, sessionId,
     title: title || "New thread",
+    model: model || null,
+    thinking: thinking || null,
     openedAt: new Date().toISOString(),
     lastActiveAt: new Date().toISOString(),
   });
@@ -132,10 +157,29 @@ export async function getTranscript(key: string): Promise<{ transcript: any[]; u
   const msgs = (entry.session as any).messages || [];
   const usage = (entry.session as any).getContextUsage?.() || {};
   return {
-    transcript: msgs.map((m: any) => ({
-      role: m.role || (m.type === "user" ? "user" : "assistant"),
-      content: typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.map((c: any) => c.text || "").join("") : "",
-    })),
+    transcript: msgs.map((m: any) => {
+      const role = m.role || (m.type === "user" ? "user" : "assistant");
+      // Preserve structured content when available (SDK format: array of {type, text/thinking})
+      if (Array.isArray(m.content)) {
+        const blocks: Array<{ type: "text" | "thinking"; content: string }> = [];
+        for (const c of m.content) {
+          if (c.type === "text" && c.text) {
+            blocks.push({ type: "text", content: c.text });
+          } else if (c.type === "thinking" && c.thinking) {
+            blocks.push({ type: "thinking", content: c.thinking });
+          }
+        }
+        if (blocks.length > 0) {
+          return { role, blocks, timestamp: m.timestamp || new Date().toISOString() };
+        }
+      }
+      // Fallback: plain string content
+      return {
+        role,
+        content: typeof m.content === "string" ? m.content : "",
+        timestamp: m.timestamp || new Date().toISOString(),
+      };
+    }),
     usage,
   };
 }

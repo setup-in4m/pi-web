@@ -112,11 +112,11 @@ router.post("/session/open", async (req, res) => {
 // Create session
 router.post("/session/create", async (req, res) => {
   try {
-    const { workspacePath, title } = req.body;
+    const { workspacePath, title, model, thinking } = req.body;
     if (!workspacePath) {
       return res.status(400).json({ error: "workspacePath required", code: "INVALID_INPUT" });
     }
-    const result = await sessions.create(workspacePath, title);
+    const result = await sessions.create(workspacePath, title, model, thinking);
     res.json(result);
   } catch (e: any) {
     console.error("Create error:", e);

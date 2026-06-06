@@ -67,10 +67,17 @@ export interface SessionRecord {
   thinking: string | null;
 }
 
+export interface ContentBlock {
+  type: "thinking" | "text";
+  content: string;
+}
+
 export interface MessageRecord {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  /** Structured content blocks (text + thinking within one message). When present, UI renders from blocks. */
+  blocks?: ContentBlock[];
 }
 
 export interface UsageInfo {
@@ -111,10 +118,12 @@ export const openSession = (workspacePath: string, sessionId: string) =>
     { workspacePath, sessionId }
   );
 
-export const createSession = (workspacePath: string, title?: string) =>
+export const createSession = (workspacePath: string, title?: string, model?: { provider: string; modelId: string } | null, thinking?: string | null) =>
   api.post<{ sessionId: string; key: string; title: string }>("/api/session/create", {
     workspacePath,
     title,
+    model,
+    thinking,
   });
 
 export const sendMessage = (key: string, message: string) =>

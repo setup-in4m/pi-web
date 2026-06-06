@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useState, useEffect } from "react";
-import type { MessageRecord } from "../../lib/api";
+import type { MessageRecord, ContentBlock } from "../../lib/api";
 import { renderMarkdown, escapeHtml } from "../../lib/markdown";
 import { formatTime } from "../../lib/time";
 import { useModelStore } from "../../stores/modelStore";
@@ -61,6 +61,28 @@ function executeInlineCode(code: string, lang: string, btn: HTMLElement) {
   }
 }
 
+/** Render blocks as HTML during streaming (no markdown, just escaped). */
+function streamingBlocksHtml(blocks: ContentBlock[]): string {
+  let html = '';
+  for (const block of blocks) {
+    if (block.type === "thinking") {
+      html += `<div class="thinking-section" data-live-thinking="true">
+  <div class="thinking-header" style="cursor:default">
+    <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
+    <span>Thinking…</span>
+    <span class="thinking-toggle" style="transform:none">▾</span>
+  </div>
+  <div class="thinking-content">
+    <div class="thinking-content-inner">${escapeHtml(block.content)}<span class="streaming-cursor">▊</span></div>
+  </div>
+</div>`;
+    } else {
+      html += escapeHtml(block.content) + '<span class="streaming-cursor">▊</span>';
+    }
+  }
+  return html;
+}
+
 export function MessageBubble({ message, streaming, panelIndex }: Props) {
   const isUser = message.role === "user";
   const [modelInfoOpen, setModelInfoOpen] = useState(false);
@@ -81,29 +103,53 @@ export function MessageBubble({ message, streaming, panelIndex }: Props) {
     document.head.appendChild(style);
   }, [streaming]);
 
-  // Infrastructure messages (thinking, tool cards, sub-agents) — render HTML as-is
+/** Infrastructure messages (thinking, tool cards, sub-agents) — render HTML as-is */
   const isInfra =
     message.content.includes('thinking-section') ||
     message.content.includes('tool-card') ||
     message.content.includes('sub-agent-card') ||
     message.content.includes('data-live-thinking');
 
+  // Blocks-based message (new unified format): render from blocks within one message
+  const hasBlocks = message.blocks && message.blocks.length > 0;
+
   const formatted = useMemo(() => {
     if (isUser) return formatSimple(message.content);
 
-    if (isInfra) {
-      return message.content; // raw HTML from our own renderers, safe
+    if (isInfra && !hasBlocks) {
+      return message.content; // raw HTML from legacy renderers, safe
     }
 
     if (streaming) {
+      // During streaming with blocks, render text blocks live
+      if (hasBlocks) {
+        return streamingBlocksHtml(message.blocks!);
+      }
+      // Legacy streaming: escaped plain text
       return escapeHtml(message.content).replace(/\n/g, '<br>');
     }
 
+    // After streaming: render full markdown or use blocks HTML
+    if (hasBlocks) {
+      return message.content; // content was pre-built from blocks via blocksToHtml
+    }
+
     return renderMarkdown(message.content);
-  }, [message.content, isUser, streaming, isInfra]);
+  }, [message.content, message.blocks, isUser, streaming, isInfra, hasBlocks]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
+
+    // Thinking toggle: expand/collapse individual thinking blocks
+    const thinkingHeader = target.closest("[data-pi-toggle='thinking']");
+    if (thinkingHeader) {
+      const section = thinkingHeader.closest(".thinking-section");
+      if (section) {
+        section.classList.toggle("collapsed");
+      }
+      return;
+    }
+
     if (target.closest(".copy-code-btn")) {
       const btn = target.closest(".copy-code-btn") as HTMLElement;
       const c = btn.getAttribute("data-code");

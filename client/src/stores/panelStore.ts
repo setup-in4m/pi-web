@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import type { MessageRecord, UsageInfo } from "../lib/api";
+import type { MessageRecord, ContentBlock, UsageInfo } from "../lib/api";
 import * as api from "../lib/api";
 import { subscribe as wsSubscribe, onReconnect } from "../lib/ws";
 import { useToastStore } from "./toastStore";
 import { renderToolStart, renderToolEnd } from "../lib/tools";
-import { createThinkingSectionRaw, escapeHtml } from "../lib/markdown";
+import { createThinkingSectionRaw, escapeHtml, renderMarkdown } from "../lib/markdown";
 
 export interface PanelData {
   id: number;
@@ -14,6 +14,8 @@ export interface PanelData {
   title: string;
   model: { provider: string; modelId: string } | null;
   thinking: string;
+  /** Whether thinking blocks are hidden (collapsed). Persisted across restarts. */
+  hideThinking: boolean;
   messages: MessageRecord[];
   streaming: boolean;
   loadingMessages: boolean;
@@ -25,7 +27,8 @@ export interface PanelData {
   pinnedIndices: number[];          // indices of pinned messages
   stallTimer?: ReturnType<typeof setTimeout> | null;
   stallNotified?: boolean;
-  streamingTextIdx: number | null;  // index of the live plain-text message during streaming
+  /** Accumulating content blocks during streaming (unified text+thinking within one message) */
+  streamingBlocks: ContentBlock[];
 }
 
 interface PanelSlice {
@@ -44,6 +47,8 @@ interface PanelState extends PanelSlice {
   setModel: (index: number, provider: string, modelId: string) => void;
   setThinking: (index: number, level: string) => void;
   setTitle: (index: number, title: string) => void;
+  toggleHideThinking: (index: number) => void;
+  setHideThinking: (index: number, hide: boolean) => void;
 
   createAndSend: (index: number, message: string) => Promise<void>;
   sendMessage: (index: number, message: string) => Promise<void>;
@@ -107,6 +112,8 @@ function loadPersisted(): PanelSlice {
           streaming: false,
           loadingMessages: false,
           usage: null as UsageInfo | null,
+          hideThinking: p.hideThinking ?? false,
+          streamingBlocks: [] as ContentBlock[],
         })),
         activeIndex: data.activeIndex || 0,
         nextId: data.nextId || 1,
@@ -116,8 +123,8 @@ function loadPersisted(): PanelSlice {
   return {
     panels: [{
       id: 1, workspacePath: null, sessionKey: null, sessionId: null,
-      title: "", model: null, thinking: "off",
-      messages: [], streaming: false, loadingMessages: false, thinkingContent: "", thinkingStartTime: null, streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingTextIdx: null,
+      title: "", model: null, thinking: "off", hideThinking: false,
+      messages: [], streaming: false, loadingMessages: false, thinkingContent: "", thinkingStartTime: null, streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingBlocks: [],
     }],
     activeIndex: 0,
     nextId: 2,
@@ -133,6 +140,7 @@ function persist(state: PanelSlice): void {
     title: p.title,
     model: p.model,
     thinking: p.thinking,
+    hideThinking: p.hideThinking,
     pinnedIndices: p.pinnedIndices,
   }));
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -155,26 +163,85 @@ export const usePanelStore = create<PanelState>((set, get) => {
       case "message_start":
         state.closeLiveThinking(event.sessionKey);
         state.resetStreamingTokens(event.sessionKey);
-        // Only replace if text is non-empty (server no longer sends text on message_start;
-        // this guards against duplicate text when text_deltas also stream same content).
-        if (event.replace && event.text) {
-          state.replaceLastAssistant(event.sessionKey, event.text);
-        }
-        state.setStreaming(event.sessionKey, true);
+        // Create a streaming placeholder message that we'll update as blocks arrive
+        set((s) => ({
+          panels: s.panels.map((p) => {
+            if (p.sessionKey !== event.sessionKey) return p;
+            // Remove any stale streaming placeholder (safety)
+            const msgs = p.messages.filter((m) =>
+              !(m.role === "assistant" && m.content === "" && !m.blocks)
+            );
+            msgs.push({ role: "assistant", content: "", blocks: [], timestamp: new Date().toISOString() });
+            return { ...p, messages: msgs, streamingBlocks: [], streaming: true };
+          }),
+        }));
         break;
       case "text_delta":
         if (event.text) {
-          state.updateLastAssistant(event.sessionKey, event.text);
-          const estimatedTokens = Math.round(event.text.length / 4);
-          state.setStreamingTokens(event.sessionKey, estimatedTokens);
+          set((s) => ({
+            panels: s.panels.map((p) => {
+              if (p.sessionKey !== event.sessionKey) return p;
+              const blocks = [...p.streamingBlocks];
+              const last = blocks[blocks.length - 1];
+              if (last && last.type === "text") {
+                blocks[blocks.length - 1] = { ...last, content: last.content + event.text };
+              } else {
+                blocks.push({ type: "text", content: event.text! });
+              }
+              // Update the streaming placeholder message with the blocks
+              const msgs = [...p.messages];
+              const lastMsg = msgs[msgs.length - 1];
+              if (lastMsg && lastMsg.role === "assistant" && (!lastMsg.content || lastMsg.blocks)) {
+                msgs[msgs.length - 1] = {
+                  ...lastMsg,
+                  blocks: [...blocks],
+                  content: streamingBlocksToHtml(blocks),
+                };
+              }
+              const estimatedTokens = Math.round(event.text!.length / 4);
+              return {
+                ...p,
+                messages: msgs,
+                streamingBlocks: blocks,
+                streamingOutputTokens: p.streamingOutputTokens + estimatedTokens,
+              };
+            }),
+          }));
         }
         break;
       case "thinking_delta":
         if (event.text) {
-          // Progressive live thinking block (visible during streaming)
-          state.upsertLiveThinking(event.sessionKey, event.text);
-          // Track thinking tokens
-          state.addThinkingTokens(event.sessionKey, Math.round(event.text.length / 4));
+          set((s) => ({
+            panels: s.panels.map((p) => {
+              if (p.sessionKey !== event.sessionKey) return p;
+              const blocks = [...p.streamingBlocks];
+              const last = blocks[blocks.length - 1];
+              if (last && last.type === "thinking") {
+                blocks[blocks.length - 1] = { ...last, content: last.content + event.text };
+              } else {
+                blocks.push({ type: "thinking", content: event.text! });
+              }
+              // Update the streaming placeholder message
+              const msgs = [...p.messages];
+              const lastMsg = msgs[msgs.length - 1];
+              if (lastMsg && lastMsg.role === "assistant" && (!lastMsg.content || lastMsg.blocks)) {
+                msgs[msgs.length - 1] = {
+                  ...lastMsg,
+                  blocks: [...blocks],
+                  content: streamingBlocksToHtml(blocks),
+                };
+              }
+              const thinkingTokens = Math.round(event.text!.length / 4);
+              return {
+                ...p,
+                messages: msgs,
+                streamingBlocks: blocks,
+                thinkingTokens: (p.thinkingTokens || 0) + thinkingTokens,
+                thinkingContent: p.thinkingContent + event.text,
+                thinkingStartTime: p.thinkingStartTime ?? Date.now(),
+              };
+            }),
+          }));
         }
         break;
       case "tool_start": {
@@ -203,12 +270,36 @@ export const usePanelStore = create<PanelState>((set, get) => {
         }
         break;
       }
-      case "agent_end":
-        state.setStreaming(event.sessionKey, false);
-        state.resetStreamingTokens(event.sessionKey);
-        state.closeLiveThinking(event.sessionKey);
-        if (event.usage) state.setUsage(event.sessionKey, event.usage);
+      case "agent_end": {
+        // Finalize streaming blocks into the last message
+        set((s) => ({
+          panels: s.panels.map((p) => {
+            if (p.sessionKey !== event.sessionKey) return p;
+            const blocks = p.streamingBlocks.length > 0 ? [...p.streamingBlocks] : undefined;
+            const msgs = [...p.messages];
+            if (blocks && blocks.length > 0) {
+              const html = blocksToHtml(blocks, p.hideThinking, p.thinkingStartTime);
+              const lastMsg = msgs[msgs.length - 1];
+              if (lastMsg && lastMsg.role === "assistant" && (!lastMsg.content || lastMsg.blocks)) {
+                msgs[msgs.length - 1] = { ...lastMsg, content: html, blocks, timestamp: lastMsg.timestamp };
+              } else {
+                msgs.push({ role: "assistant", content: html, blocks, timestamp: new Date().toISOString() });
+              }
+            }
+            return {
+              ...p,
+              messages: msgs,
+              streaming: false,
+              streamingBlocks: [],
+              streamingOutputTokens: 0,
+              thinkingContent: "",
+              thinkingStartTime: null,
+              usage: event.usage || p.usage,
+            };
+          }),
+        }));
         break;
+      }
       case "error":
         if (event.error) {
           state.appendMessage(event.sessionKey, {
@@ -299,8 +390,8 @@ export const usePanelStore = create<PanelState>((set, get) => {
         id: s.nextId,
         workspacePath: s.panels[s.activeIndex]?.workspacePath || null,
         sessionKey: null, sessionId: null, title: "",
-        model: null, thinking: "off",
-        messages: [], streaming: false, loadingMessages: false, thinkingContent: "", thinkingStartTime: null, streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingTextIdx: null,
+        model: null, thinking: "off", hideThinking: false,
+        messages: [], streaming: false, loadingMessages: false, thinkingContent: "", thinkingStartTime: null, streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingBlocks: [],
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -371,6 +462,47 @@ export const usePanelStore = create<PanelState>((set, get) => {
         panels: s.panels.map((p, i) => i === index ? { ...p, title } : p),
       })),
 
+    toggleHideThinking: (index) => {
+      const panel = get().panels[index];
+      if (!panel) return;
+      const newHide = !panel.hideThinking;
+      // Rebuild message HTML for all messages that have blocks
+      set((s) => ({
+        panels: s.panels.map((p, i) => {
+          if (i !== index) return p;
+          const msgs = p.messages.map((m) => {
+            if (m.blocks && m.blocks.length > 0) {
+              return { ...m, content: blocksToHtml(m.blocks, newHide) };
+            }
+            return m;
+          });
+          return { ...p, hideThinking: newHide, messages: msgs };
+        }),
+      }));
+      // Persist after state update
+      const next = get();
+      persist({ panels: next.panels, activeIndex: next.activeIndex, nextId: next.nextId });
+    },
+
+    setHideThinking: (index, hide) => {
+      const panel = get().panels[index];
+      if (!panel || panel.hideThinking === hide) return;
+      set((s) => ({
+        panels: s.panels.map((p, i) => {
+          if (i !== index) return p;
+          const msgs = p.messages.map((m) => {
+            if (m.blocks && m.blocks.length > 0) {
+              return { ...m, content: blocksToHtml(m.blocks, hide) };
+            }
+            return m;
+          });
+          return { ...p, hideThinking: hide, messages: msgs };
+        }),
+      }));
+      const next = get();
+      persist({ panels: next.panels, activeIndex: next.activeIndex, nextId: next.nextId });
+    },
+
     createAndSend: async (index, message) => {
       const panel = get().panels[index];
       if (!panel) return;
@@ -382,7 +514,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
       }));
 
       try {
-        const result = await api.createSession(panel.workspacePath!, message.slice(0, 40));
+        const result = await api.createSession(panel.workspacePath!, message.slice(0, 40), panel.model, panel.thinking);
         const s = get();
         const next = {
           panels: s.panels.map((p, i) =>
@@ -493,7 +625,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
           } else {
             msgs.push({ role: "assistant", content, timestamp: new Date().toISOString() });
           }
-          return { ...p, messages: msgs, streamingTextIdx: textIdx >= 0 ? textIdx : msgs.length - 1 };
+          return { ...p, messages: msgs };
         }),
       })),
 
@@ -508,8 +640,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
           } else {
             msgs.push({ role: "assistant", content, timestamp: new Date().toISOString() });
           }
-          const newTextIdx = textIdx >= 0 ? textIdx : msgs.length - 1;
-          return { ...p, messages: msgs, streamingTextIdx: newTextIdx };
+          return { ...p, messages: msgs };
         }),
       })),
 
@@ -593,6 +724,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         title: "",
         model: source?.model || null,
         thinking: source?.thinking || "off",
+        hideThinking: source?.hideThinking ?? false,
         messages: [],
         streaming: false,
         loadingMessages: false,
@@ -601,7 +733,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         thinkingTokens: 0,
         usage: null,
         pinnedIndices: [],
-        streamingTextIdx: null,
+        streamingBlocks: [],
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -634,6 +766,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         title: message.slice(0, 40),
         model: { provider, modelId },
         thinking: source.thinking || "off",
+        hideThinking: source.hideThinking ?? false,
         messages: [{ role: "user", content: message, timestamp: new Date().toISOString() }],
         streaming: true,
         loadingMessages: false,
@@ -642,7 +775,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         thinkingTokens: 0,
         usage: null,
         pinnedIndices: [],
-        streamingTextIdx: null,
+        streamingBlocks: [],
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -655,7 +788,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
       // Create session and send
       const newIndex = s.panels.length;
       try {
-        const result = await api.createSession(source.workspacePath, message.slice(0, 40));
+        const result = await api.createSession(source.workspacePath, message.slice(0, 40), { provider, modelId }, source.thinking);
         set((s2) => {
           const p = s2.panels.map((p, i) =>
             i === newIndex ? { ...p, sessionKey: result.key, sessionId: result.sessionId, title: result.title } : p
@@ -701,6 +834,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         title: "",
         model: null,
         thinking: "off",
+        hideThinking: false,
         messages: [],
         streaming: false,
         loadingMessages: false,
@@ -709,7 +843,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         thinkingTokens: 0,
         usage: null,
         pinnedIndices: [],
-        streamingTextIdx: null,
+        streamingBlocks: [],
       };
       const next: PanelSlice = { panels: [panel], activeIndex: 0, nextId: s.nextId + 1 };
       set(next);
@@ -740,6 +874,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         title: source.title ? `${source.title} (branch)` : "Branch",
         model: source.model ? { ...source.model } : null,
         thinking: source.thinking || "off",
+        hideThinking: source.hideThinking ?? false,
         messages: [...contextMessages],
         streaming: false,
         loadingMessages: false,
@@ -748,7 +883,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         thinkingTokens: 0,
         usage: null,
         pinnedIndices: [],
-        streamingTextIdx: null,
+        streamingBlocks: [],
       };
       const next: PanelSlice = {
         panels: [...s.panels, newPanel],
@@ -1200,3 +1335,68 @@ function renderSubAgentDone(id: string, task: string, result: string, usage?: { 
 }
 
 // escapeHtml imported from ../lib/tools — no local duplicate needed
+
+// ── Blocks → HTML converter ─────────────────────────────
+
+/** Build HTML from content blocks during streaming (escaped, no markdown). */
+function streamingBlocksToHtml(blocks: ContentBlock[]): string {
+  let html = '';
+  for (const block of blocks) {
+    if (block.type === "thinking") {
+      html += `<div class="thinking-section" data-live-thinking="true">
+  <div class="thinking-header" style="cursor:default">
+    <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
+    <span>Thinking…</span>
+    <span class="thinking-toggle" style="transform:none">▾</span>
+  </div>
+  <div class="thinking-content">
+    <div class="thinking-content-inner">${escapeHtml(block.content)}<span class="streaming-cursor">▊</span></div>
+  </div>
+</div>`;
+    } else {
+      html += escapeHtml(block.content);
+    }
+  }
+  html += '<span class="streaming-cursor">▊</span>';
+  return html;
+}
+
+/** Build HTML from content blocks (text + thinking). Respects hideThinking flag. */
+function blocksToHtml(blocks: ContentBlock[], hideThinking: boolean, thinkingStartTime?: number | null): string {
+  let html = '';
+  const thinkTime = thinkingStartTime ? Math.round((Date.now() - thinkingStartTime) / 1000) : undefined;
+  const timeStr = thinkTime != null ? String(thinkTime) : null;
+
+  for (const block of blocks) {
+    if (block.type === "thinking") {
+      if (hideThinking) {
+        // Hidden: show collapsed static label
+        html += `<div class="thinking-section collapsed">
+  <div class="thinking-header" data-pi-toggle="thinking">
+    <span>Thinking…</span>
+    ${timeStr ? `<span class="thinking-time">${escapeHtml(timeStr)}s</span>` : ''}
+    <span class="thinking-toggle">▸</span>
+  </div>
+  <div class="thinking-content">
+    <div class="thinking-content-inner">${escapeHtml(block.content)}</div>
+  </div>
+</div>`;
+      } else {
+        // Visible: expanded
+        html += `<div class="thinking-section">
+  <div class="thinking-header" data-pi-toggle="thinking">
+    <span>View thinking process</span>
+    ${timeStr ? `<span class="thinking-time">${escapeHtml(timeStr)}s</span>` : ''}
+    <span class="thinking-toggle">▾</span>
+  </div>
+  <div class="thinking-content">
+    <div class="thinking-content-inner">${renderMarkdown(block.content)}</div>
+  </div>
+</div>`;
+      }
+    } else if (block.type === "text") {
+      html += renderMarkdown(block.content);
+    }
+  }
+  return html;
+}

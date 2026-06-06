@@ -1076,7 +1076,7 @@ function renderLiveThinking({ content, streaming }: { content: string; streaming
     return `<div class="thinking-section" data-live-thinking="true">
   <div class="thinking-header" style="cursor:default">
     <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
-    <span>Thinking…</span>
+    <span>View thinking process</span>
     <span class="thinking-toggle" style="transform:none">▾</span>
   </div>
   <div class="thinking-content">

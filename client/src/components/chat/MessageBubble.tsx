@@ -135,9 +135,11 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
   // ── Model info for assistant messages ────────────────
   const panel = usePanelStore((s) => panelIndex != null ? s.panels[panelIndex] : undefined);
   const models = useModelStore((s) => s.models);
-  const currentModel = panel?.model;
+  const defaultProvider = useModelStore((s) => s.defaultProvider);
+  const defaultModel = useModelStore((s) => s.defaultModel);
+  const currentModel = panel?.model || { provider: defaultProvider, modelId: defaultModel };
   const modelObj = currentModel ? models.find(m => m.providerId === currentModel.provider && m.modelId === currentModel.modelId) : undefined;
-  const modelDisplay = modelObj?.displayName || currentModel?.modelId || (panel?.model ? `${panel.model.provider}/${panel.model.modelId}` : undefined);
+  const modelDisplay = modelObj?.displayName || currentModel?.modelId || `${currentModel?.provider}/${currentModel?.modelId}`;
   const [modelInfoOpen, setModelInfoOpen] = useState(false);
 
   const dotColor = isUser ? 'var(--color-accent)' : modelDotColor(modelDisplay);

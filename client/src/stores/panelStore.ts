@@ -5,6 +5,7 @@ import { subscribe as wsSubscribe, onReconnect } from "../lib/ws";
 import { useToastStore } from "./toastStore";
 import { renderToolStart, renderToolEnd } from "../lib/tools";
 import { createThinkingSectionRaw, escapeHtml, renderMarkdown } from "../lib/markdown";
+import { useModelStore } from "./modelStore";
 
 export interface PanelData {
   id: number;
@@ -386,11 +387,14 @@ export const usePanelStore = create<PanelState>((set, get) => {
     addPanel: () => {
       const s = get();
       if (s.panels.length >= 8) return;
+      const active = s.panels[s.activeIndex];
       const newPanel: PanelData = {
         id: s.nextId,
-        workspacePath: s.panels[s.activeIndex]?.workspacePath || null,
+        workspacePath: active?.workspacePath || null,
         sessionKey: null, sessionId: null, title: "",
-        model: null, thinking: "off", hideThinking: false,
+        model: active?.model || null,
+        thinking: active?.thinking || "off",
+        hideThinking: active?.hideThinking ?? false,
         messages: [], streaming: false, loadingMessages: false, thinkingContent: "", thinkingStartTime: null, streamingOutputTokens: 0, thinkingTokens: 0, usage: null, pinnedIndices: [], streamingBlocks: [],
       };
       const next: PanelSlice = {
@@ -514,7 +518,15 @@ export const usePanelStore = create<PanelState>((set, get) => {
       }));
 
       try {
-        const result = await api.createSession(panel.workspacePath!, message.slice(0, 40), panel.model, panel.thinking);
+        // Resolve model: use panel model, or fall back to store default
+        const model = panel.model || (() => {
+          const ms = useModelStore.getState();
+          if (ms.defaultProvider && ms.defaultModel) {
+            return { provider: ms.defaultProvider, modelId: ms.defaultModel };
+          }
+          return null;
+        })();
+        const result = await api.createSession(panel.workspacePath!, message.slice(0, 40), model, panel.thinking);
         const s = get();
         const next = {
           panels: s.panels.map((p, i) =>

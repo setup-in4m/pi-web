@@ -1340,11 +1340,12 @@ function renderSubAgentDone(id: string, task: string, result: string, usage?: { 
 
 /** Build HTML from content blocks during streaming (escaped, no markdown). */
 function streamingBlocksToHtml(blocks: ContentBlock[]): string {
+  if (!blocks || !blocks.length) return '';
   let html = '';
   for (const block of blocks) {
     if (block.type === "thinking") {
       html += `<div class="thinking-section" data-live-thinking="true">
-  <div class="thinking-header" style="cursor:default">
+  <div class="thinking-header" data-pi-toggle="thinking" style="cursor:pointer">
     <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
     <span>Thinking…</span>
     <span class="thinking-toggle" style="transform:none">▾</span>
@@ -1363,6 +1364,7 @@ function streamingBlocksToHtml(blocks: ContentBlock[]): string {
 
 /** Build HTML from content blocks (text + thinking). Respects hideThinking flag. */
 function blocksToHtml(blocks: ContentBlock[], hideThinking: boolean, thinkingStartTime?: number | null): string {
+  if (!blocks || !blocks.length) return '';
   let html = '';
   const thinkTime = thinkingStartTime ? Math.round((Date.now() - thinkingStartTime) / 1000) : undefined;
   const timeStr = thinkTime != null ? String(thinkTime) : null;

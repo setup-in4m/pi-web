@@ -96,7 +96,7 @@ export function ChatView({ panel, panelIndex }: Props) {
   // Track last message content size to auto-scroll during text streaming
   // (content grows without messages.length changing → need size-based trigger)
   const lastMsg = panel.messages[panel.messages.length - 1];
-  const lastContentLen = lastMsg ? lastMsg.content.length : 0;
+  const lastContentLen = lastMsg?.content?.length ?? 0;
 
   // Auto-scroll when streaming (fires on new messages AND content growth)
   useEffect(() => {
@@ -362,7 +362,7 @@ export function ChatView({ panel, panelIndex }: Props) {
         {/* Virtualized message list */}
         <div
           style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}
-          className="py-3"
+          className="py-3 px-3"
         >
           {virtualizer.getVirtualItems().map((virtualItem) => {
             const i = virtualItem.index;
@@ -376,7 +376,7 @@ export function ChatView({ panel, panelIndex }: Props) {
 
             return (
               <div
-                key={`${virtualItem.key}-${msg.content.length}`}
+                key={`${virtualItem.key}-${msg.content?.length ?? 0}`}
                 data-index={i}
                 ref={virtualizer.measureElement}
                 style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualItem.start}px)` }}

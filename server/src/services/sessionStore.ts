@@ -163,6 +163,7 @@ export async function getTranscript(key: string): Promise<{ transcript: any[]; u
   return {
     transcript: msgs.map((m: any) => {
       const role = m.role || (m.type === "user" ? "user" : "assistant");
+      const ts = m.timestamp || new Date().toISOString();
       // Preserve structured content when available (SDK format: array of {type, text/thinking})
       if (Array.isArray(m.content)) {
         const blocks: Array<{ type: "text" | "thinking"; content: string }> = [];
@@ -173,15 +174,16 @@ export async function getTranscript(key: string): Promise<{ transcript: any[]; u
             blocks.push({ type: "thinking", content: c.thinking });
           }
         }
+        const plainText = blocks.filter(b => b.type === "text").map(b => b.content).join("\n");
         if (blocks.length > 0) {
-          return { role, blocks, timestamp: m.timestamp || new Date().toISOString() };
+          return { role, content: plainText, blocks, timestamp: ts };
         }
       }
       // Fallback: plain string content
       return {
         role,
         content: typeof m.content === "string" ? m.content : "",
-        timestamp: m.timestamp || new Date().toISOString(),
+        timestamp: ts,
       };
     }),
     usage,

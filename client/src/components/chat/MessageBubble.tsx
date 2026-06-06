@@ -63,11 +63,12 @@ function executeInlineCode(code: string, lang: string, btn: HTMLElement) {
 
 /** Render blocks as HTML during streaming (no markdown, just escaped). */
 function streamingBlocksHtml(blocks: ContentBlock[]): string {
+  if (!blocks || !blocks.length) return '';
   let html = '';
   for (const block of blocks) {
     if (block.type === "thinking") {
       html += `<div class="thinking-section" data-live-thinking="true">
-  <div class="thinking-header" style="cursor:default">
+  <div class="thinking-header" data-pi-toggle="thinking" style="cursor:pointer">
     <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
     <span>Thinking…</span>
     <span class="thinking-toggle" style="transform:none">▾</span>
@@ -112,6 +113,8 @@ export function MessageBubble({ message, streaming, panelIndex }: Props) {
 
   // Blocks-based message (new unified format): render from blocks within one message
   const hasBlocks = message.blocks && message.blocks.length > 0;
+  // True while streaming with no content yet (placeholder waiting for first delta)
+  const isEmptyStreaming = streaming && !isUser && !hasBlocks && !message.content;
 
   const formatted = useMemo(() => {
     if (isUser) return formatSimple(message.content);
@@ -183,7 +186,7 @@ export function MessageBubble({ message, streaming, panelIndex }: Props) {
   const dotColor = isUser ? 'var(--color-accent)' : modelDotColor(modelDisplay);
   const roleLabel = isUser ? 'You' : (modelDisplay?.split('/').pop() || 'pi');
 
-  const tokens = estimateTokens(message.content);
+  const tokens = estimateTokens(message.content || '');
 
   // Infrastructure messages (thinking, tool cards, sub-agents) render inline
   // without role line — they visually attach to the main response above/below.
@@ -194,6 +197,24 @@ export function MessageBubble({ message, streaming, panelIndex }: Props) {
       <div className="mb-0 animate-[fadeIn_0.2s_ease]">
         <div onClick={handleClick} className="text-[var(--color-t1)]">
           <span dangerouslySetInnerHTML={{ __html: formatted }} />
+        </div>
+      </div>
+    );
+  }
+
+  // Empty streaming placeholder — show subtle waiting indicator, no full role line
+  if (isEmptyStreaming) {
+    return (
+      <div className="flex flex-col mb-2 animate-[fadeIn_0.2s_ease]">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span
+            className="w-1.5 h-1.5 rounded-full flex-shrink-0 animate-pulse"
+            style={{ backgroundColor: dotColor }}
+          />
+          <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: dotColor }}>
+            {roleLabel}
+          </span>
+          <span className="text-[7px] text-[var(--color-t3)]">thinking…</span>
         </div>
       </div>
     );

@@ -318,11 +318,9 @@ svg.lucide,
 }
 .thinking-content {
   overflow: hidden;
-  max-height: 2000px;
-  transition: max-height 0.3s ease;
 }
 .thinking-section.collapsed .thinking-content {
-  max-height: 0;
+  display: none;
 }
 .thinking-content-inner {
   padding: 0.15rem 0 0;
@@ -330,8 +328,6 @@ svg.lucide,
   color: var(--color-t2);
   white-space: pre-wrap;
   line-height: 1.4;
-  max-height: 300px;
-  overflow-y: auto;
 }
 /* Hide code copy buttons inside thinking — meta content, not user-facing */
 .thinking-section .copy-code-btn { display: none; }

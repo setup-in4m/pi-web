@@ -1,10 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   FolderOpen, Plus, Folder, ChevronRight, Settings,
-  Trash2, RefreshCw, ArrowUpDown, Search, Star, Copy, X,
-  PanelLeftClose, PanelLeft
+  Trash2, RefreshCw, ArrowUpDown, Search, Star, Copy, X
 } from "lucide-react";
-import { clampContextMenu } from "../../lib/clampMenu";
 import { useWorkspaceStore, type SortMode } from "../../stores/workspaceStore";
 import { useModelStore } from "../../stores/modelStore";
 import { usePanelStore } from "../../stores/panelStore";
@@ -12,8 +10,6 @@ import { useToastStore } from "../../stores/toastStore";
 import * as api from "../../lib/api";
 import { openFolder } from "../../lib/tauri";
 import { isConnected } from "../../lib/ws";
-
-import { timeAgo } from "../../lib/time";
 
 // ── LocalStorage helpers ──────────────────────────────────
 const SORT_KEY = "pi-web-session-sort";
@@ -44,7 +40,6 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { models } = useModelStore();
   const { panels, openExistingSession } = usePanelStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [collapsed, setCollapsed] = useState(false);
   const [version, setVersion] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>(getStoredSort);
   const [searchQuery, setSearchQuery] = useState("");
@@ -228,26 +223,16 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   }, [workspaces, searchQuery]);
 
   return (
-    <aside className={`bg-[var(--color-bg2)] border-r border-[var(--color-bd)] flex flex-col z-10 transition-all duration-200 ${collapsed ? "w-[36px] min-w-[36px]" : "w-[240px] min-w-[240px]"}`}>
+    <aside className="w-[240px] min-w-[240px] bg-[var(--color-bg2)] border-r border-[var(--color-bd)] flex flex-col z-10">
       {/* Header */}
-      <div className={`px-3 py-2.5 border-b border-[var(--color-bd)] flex items-center gap-2 flex-shrink-0 ${collapsed ? "justify-center px-1" : ""}`}>
-        {!collapsed && <>
+      <div className="px-3 py-2.5 border-b border-[var(--color-bd)] flex items-center gap-2 flex-shrink-0">
         <div className="w-5 h-5 bg-[var(--color-accent)] rounded flex items-center justify-center font-bold text-[10px] text-white shadow-[0_0_8px_var(--color-accent-glow)] flex-shrink-0">
           π
         </div>
         <span className="text-xs font-semibold">pi</span>
         {version && <span className="text-[9px] text-[var(--color-t3)] ml-auto">{version}</span>}
-        </>}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="text-[var(--color-t3)] hover:text-[var(--color-t1)] transition-colors p-0.5 flex-shrink-0"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <PanelLeft size={14} /> : <PanelLeftClose size={14} />}
-        </button>
       </div>
 
-      {!collapsed && <>
       {/* Actions */}
       <div className="p-2 flex-shrink-0">
         <button
@@ -324,8 +309,7 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                 onContextMenu={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  const pos = clampContextMenu(e.clientX, e.clientY, 160, 140);
-                  setContextMenu({ x: pos.left, y: pos.top, path: ws.path });
+                  setContextMenu({ x: e.clientX, y: e.clientY, path: ws.path });
                 }}
                 className={`flex items-center gap-1 px-1.5 py-1 rounded cursor-pointer text-[11px] transition-colors hover:bg-[var(--color-bgh)] ${isOpen ? "bg-[var(--color-bga)]" : ""}`}
               >
@@ -392,39 +376,15 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                       {searchQuery ? "No matching sessions" : "No sessions yet"}
                     </div>
                   )}
-                  {/* Render sessions with pinned header */}
-                  {(() => {
-                    let sawPinned = false;
-                    let sawUnpinned = false;
-                    return sortedSessions.flatMap((s) => {
-                      const isPinned = (pinned[ws.path] || []).includes(s.id);
-                      const headerEl: React.ReactNode[] = [];
-                      if (isPinned && !sawPinned) {
-                        sawPinned = true;
-                        headerEl.push(
-                          <div key="pinned-header" className="px-2 py-0.5 text-[8px] text-[var(--color-t3)] uppercase tracking-wider flex items-center gap-1">
-                            <Star size={7} className="text-[var(--color-warning)]" />
-                            Pinned
-                          </div>
-                        );
-                      }
-                      if (!isPinned && sawPinned && !sawUnpinned) {
-                        sawUnpinned = true;
-                        headerEl.push(
-                          <div key="recent-header" className="px-2 py-0.5 mt-1 text-[8px] text-[var(--color-t3)] uppercase tracking-wider">
-                            Recent
-                          </div>
-                        );
-                      }
+                  {sortedSessions.map((s) => {
+                    const isActive = panels.some(p => p.sessionId === s.id);
+                    const cacheKey = `${ws.path}::${s.id}`;
+                    const usage = usageCache[cacheKey];
+                    const isPinned = (pinned[ws.path] || []).includes(s.id);
+                    const delKey = `${ws.path}::${s.id}`;
 
-                      const isActive = panels.some(p => p.sessionId === s.id);
-                      const cacheKey = `${ws.path}::${s.id}`;
-                      const usage = usageCache[cacheKey];
-                      const delKey = `${ws.path}::${s.id}`;
-
-                      return [
-                        ...headerEl,
-                        <div
+                    return (
+                      <div
                         key={s.id}
                         className={`group/session flex items-center gap-1 px-1.5 py-0.5 text-[10px] cursor-pointer rounded transition-colors hover:bg-[var(--color-bgh)] ${isActive ? "bg-[var(--color-bga)] text-[var(--color-accent)]" : ""} ${confirmSessionDelete === delKey ? "bg-[var(--color-danger)]/10" : ""}`}
                       >
@@ -468,10 +428,8 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
                           <X size={9} />
                         </button>
                       </div>
-                      ];
-                    });
-                  })()}
-                </div>
+                    );
+                  })}
 
                   {/* Load more button */}
                   {hasMore[ws.path] && !searchQuery && (
@@ -488,8 +446,6 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
           );
         })}
       </div>
-      </>
-      }
 
       {/* Footer */}
       <div className="px-2 py-1 border-t border-[var(--color-bd)] text-[9px] text-[var(--color-t3)] flex items-center gap-2 flex-shrink-0">
@@ -550,4 +506,12 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
       )}
     </aside>
   );
+}
+
+function timeAgo(dateStr: string): string {
+  const seconds = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (seconds < 60) return "now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
 }

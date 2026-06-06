@@ -115,10 +115,47 @@ Produce a structured report:
 
 ## Important Rules
 
+### Functional Checks (mandatory)
 - NEVER skip ui_examine on any screen — visual quality matters as much as functionality
 - ALWAYS check console/errors/network for every page — silent failures are still failures
 - For features that require server interaction, verify the WebSocket connection is active
 - If a feature requires setup (e.g., a session with messages), create that setup
-- Report even minor visual issues — polish matters
 - If the app crashes or becomes unresponsive, document the exact state that triggered it
 - Tauri-native features (system tray, global shortcuts) can't be browser-tested — mark as "Manual Verification Required"
+
+### Cosmetic Deep Dive (mandatory — do this for EVERY screen)
+These are the issues that kill release quality but automated tests miss. Be RELENTLESS.
+
+**Text & Content Duplication**
+- Examine EVERY visible text element. Is any text, label, button, or icon duplicated unintentionally?
+- Look for double model-name labels on thinking + response messages
+- Check if response text appears twice (once in thinking, once in response body)
+- Check for double copy buttons, double save buttons, double close icons
+- Question EVERY repeated element: "Is this intentional or a rendering bug?"
+
+**Thinking Block Rendering**
+- Is thinking text readable? (not tiny, not italic unless it matches CLI)
+- Is spacing proportional? (no massive gaps between thinking and response)
+- Does the thinking section visually attach to the response it belongs to?
+- Is the collapse/expand toggle working and correctly positioned?
+- Does the thinking block have its OWN copy button/menu? (it shouldn't — thinking is meta)
+
+**Spacing & Gaps**
+- Check for excessive whitespace between message blocks
+- Look for orphaned margins causing visual disconnection
+- Verify padding is consistent across similar elements
+- Check if elements feel cramped or lost
+
+**Button & Icon Hygiene**
+- Every button must have a visible label, tooltip, or clear icon meaning
+- No duplicate action buttons on the same element (e.g., two copy buttons)
+- Icon-only buttons must have aria-labels or title attributes
+- Button states (hover, active, disabled) must be visibly distinct
+
+**Consistency**
+- Font sizes consistent within the same hierarchy level
+- Colors from the theme palette (not hardcoded)
+- Border styles consistent (same radius, width, color family)
+- Compare against pi CLI experience: should feel like the same product family
+
+For every cosmetic issue found, take a SCREENSHOT that highlights the problem and run ui_examine with explicit focus on the issue. Do not dismiss cosmetic issues — they compound into a sloppy product.

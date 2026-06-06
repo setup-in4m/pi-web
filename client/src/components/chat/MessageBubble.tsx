@@ -83,15 +83,15 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
     document.head.appendChild(style);
   }, [streaming]);
 
+  // Infrastructure messages (thinking, tool cards, sub-agents) — render HTML as-is
+  const isInfra =
+    message.content.includes('thinking-section') ||
+    message.content.includes('tool-card') ||
+    message.content.includes('sub-agent-card') ||
+    message.content.includes('data-live-thinking');
+
   const formatted = useMemo(() => {
     if (isUser) return formatSimple(message.content);
-
-    // Infrastructure messages (thinking, tool cards, sub-agents) — render HTML as-is
-    const isInfra =
-      message.content.includes('thinking-section') ||
-      message.content.includes('tool-card') ||
-      message.content.includes('sub-agent-card') ||
-      message.content.includes('data-live-thinking');
 
     if (isInfra) {
       return message.content; // raw HTML from our own renderers, safe
@@ -103,7 +103,7 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
     }
 
     return renderMarkdown(message.content);
-  }, [message.content, isUser, streaming]);
+  }, [message.content, isUser, streaming, isInfra]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -164,6 +164,18 @@ export function MessageBubble({ message, streaming, onRegen, showRegen, panelInd
   const roleLabel = isUser ? 'You' : (modelDisplay?.split('/').pop() || 'pi');
 
   const tokens = estimateTokens(message.content);
+
+  // Infrastructure messages (thinking, tool cards, sub-agents) render inline
+  // without role line — they visually attach to the main response above/below.
+  if (isInfra) {
+    return (
+      <div className="mb-0 animate-[fadeIn_0.2s_ease]">
+        <div onClick={handleClick} className="text-[var(--color-t1)]">
+          <span dangerouslySetInnerHTML={{ __html: formatted }} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col mb-2 animate-[fadeIn_0.2s_ease] group/msg">

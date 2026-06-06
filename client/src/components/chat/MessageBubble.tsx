@@ -187,7 +187,9 @@ export function MessageBubble({ message, streaming, panelIndex }: Props) {
 
   // Infrastructure messages (thinking, tool cards, sub-agents) render inline
   // without role line — they visually attach to the main response above/below.
-  if (isInfra) {
+  // BUT: if the message has blocks (new unified format), render with role line
+  // since the thinking is just one block within a full assistant response.
+  if (isInfra && !hasBlocks) {
     return (
       <div className="mb-0 animate-[fadeIn_0.2s_ease]">
         <div onClick={handleClick} className="text-[var(--color-t1)]">

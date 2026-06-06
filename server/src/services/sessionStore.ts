@@ -90,12 +90,15 @@ export async function create(
     (session as any).setSessionName(title);
   }
 
-  // Apply model if provided
-  if (model && model.provider && model.modelId && (session as any).setModel) {
-    try {
-      (session as any).setModel(model.provider, model.modelId);
-    } catch (e) {
-      console.error("Failed to set model on new session:", e);
+  // Apply model if provided (must resolve Model object from registry first)
+  if (model && model.provider && model.modelId) {
+    const modelObj = modelRegistry.find(model.provider, model.modelId);
+    if (modelObj && (session as any).setModel) {
+      try {
+        await (session as any).setModel(modelObj);
+      } catch (e) {
+        console.error("Failed to set model on new session:", e);
+      }
     }
   }
 
@@ -128,8 +131,9 @@ export async function create(
 export async function setModel(key: string, provider: string, modelId: string): Promise<void> {
   const entry = activeSessions.get(key);
   if (!entry) throw new Error("Session not loaded");
-  if ((entry.session as any).setModel) {
-    (entry.session as any).setModel(provider, modelId);
+  const modelObj = modelRegistry.find(provider, modelId);
+  if (modelObj && (entry.session as any).setModel) {
+    await (entry.session as any).setModel(modelObj);
   }
   entry.model = { provider, modelId };
   store.upsertSession({ ...store.getSession(key)!, model: entry.model });
@@ -283,7 +287,10 @@ export async function spawnSubAgent(
   // Apply model if specified
   if (options?.model && subSession.setModel) {
     const [provider, modelId] = options.model.split("/");
-    if (provider && modelId) subSession.setModel(provider, modelId);
+    if (provider && modelId) {
+      const modelObj = modelRegistry.find(provider, modelId);
+      if (modelObj) await subSession.setModel(modelObj);
+    }
   }
   if (options?.thinking && subSession.setThinkingLevel) {
     subSession.setThinkingLevel(options.thinking);

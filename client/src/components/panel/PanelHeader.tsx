@@ -79,6 +79,57 @@ export function PanelHeader({ panel, panelIndex }: Props) {
       />
 
       <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+        {/* Model selector — always visible so user can choose before opening workspace */}
+        <ModelSelector
+          models={models}
+          providers={providers}
+          recentModels={recentModels}
+          currentModel={panel.model}
+          onSelect={(provider, modelId) => setModel(panelIndex, provider, modelId)}
+          onAddRecent={(provider, modelId) => addRecentModel(provider, modelId)}
+        />
+
+        {/* Thinking selector with level indicator — always visible */}
+        <div className="flex items-center gap-0.5">
+          {panel.thinking !== "off" && (
+            <span
+              className={`px-1 rounded text-[7px] font-bold uppercase leading-none ${
+                panel.thinking === "high"
+                  ? "bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
+                  : panel.thinking === "medium"
+                  ? "bg-[var(--color-warning)]/15 text-[var(--color-warning)]"
+                  : "bg-[#3b82f6]/15 text-[#3b82f6]"
+              }`}
+              title={`Thinking: ${panel.thinking}`}
+            >
+              {panel.thinking}
+            </span>
+          )}
+          <select
+            value={panel.thinking}
+            onChange={(e) => setThinking(panelIndex, e.target.value)}
+            className="bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-1 py-0 text-[9px] font-sans cursor-pointer outline-none focus:border-[var(--color-accent)]"
+            title="Thinking level"
+          >
+            <option value="off">think: off</option>
+            <option value="low">low</option>
+            <option value="medium">med</option>
+            <option value="high">high</option>
+          </select>
+          <button
+            onClick={() => toggleHideThinking(panelIndex)}
+            className={`p-0.5 rounded text-[11px] transition-colors ${
+              panel.hideThinking
+                ? "text-[var(--color-t3)] hover:text-[var(--color-t2)]"
+                : "text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
+            }`}
+            title={panel.hideThinking ? "Show thinking blocks" : "Hide thinking blocks"}
+            aria-label={panel.hideThinking ? "Show thinking" : "Hide thinking"}
+          >
+            {panel.hideThinking ? <EyeOff size={11} /> : <Eye size={11} />}
+          </button>
+        </div>
+
         {panel.workspacePath && (
           <>
             {/* Export dropdown */}
@@ -163,56 +214,6 @@ export function PanelHeader({ panel, panelIndex }: Props) {
             )}
             {/* Agent profile selector */}
             <ProfileSelector panelIndex={panelIndex} />
-            {/* Model selector */}
-            <ModelSelector
-              models={models}
-              providers={providers}
-              recentModels={recentModels}
-              currentModel={panel.model}
-              onSelect={(provider, modelId) => setModel(panelIndex, provider, modelId)}
-              onAddRecent={(provider, modelId) => addRecentModel(provider, modelId)}
-            />
-
-            {/* Thinking selector with level indicator */}
-            <div className="flex items-center gap-0.5">
-              {panel.thinking !== "off" && (
-                <span
-                  className={`px-1 rounded text-[7px] font-bold uppercase leading-none ${
-                    panel.thinking === "high"
-                      ? "bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
-                      : panel.thinking === "medium"
-                      ? "bg-[var(--color-warning)]/15 text-[var(--color-warning)]"
-                      : "bg-[#3b82f6]/15 text-[#3b82f6]"
-                  }`}
-                  title={`Thinking: ${panel.thinking}`}
-                >
-                  {panel.thinking}
-                </span>
-              )}
-              <select
-                value={panel.thinking}
-                onChange={(e) => setThinking(panelIndex, e.target.value)}
-                className="bg-[var(--color-bg3)] text-[var(--color-t2)] border border-[var(--color-bd)] rounded px-1 py-0 text-[9px] font-sans cursor-pointer outline-none focus:border-[var(--color-accent)]"
-                title="Thinking level"
-              >
-                <option value="off">think: off</option>
-                <option value="low">low</option>
-                <option value="medium">med</option>
-                <option value="high">high</option>
-              </select>
-              <button
-                onClick={() => toggleHideThinking(panelIndex)}
-                className={`p-0.5 rounded text-[11px] transition-colors ${
-                  panel.hideThinking
-                    ? "text-[var(--color-t3)] hover:text-[var(--color-t2)]"
-                    : "text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
-                }`}
-                title={panel.hideThinking ? "Show thinking blocks" : "Hide thinking blocks"}
-                aria-label={panel.hideThinking ? "Show thinking" : "Hide thinking"}
-              >
-                {panel.hideThinking ? <EyeOff size={11} /> : <Eye size={11} />}
-              </button>
-            </div>
           </>
         )}
       </div>

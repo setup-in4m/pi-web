@@ -16,9 +16,15 @@ export function WorkflowBuilder() {
   const addToast = useToastStore((s) => s.addToast);
   const panels = usePanelStore((s) => s.panels);
 
-  if (!open) return null;
-
   const workspacePath = panels[0]?.workspacePath;
+
+  const stepMap = useMemo(() => {
+    const map = new Map<string, WorkflowStep>();
+    for (const s of steps) map.set(s.id, s);
+    return map;
+  }, [steps]);
+
+  if (!open) return null;
 
   const handleExecute = async () => {
     if (!workspacePath) {
@@ -36,12 +42,6 @@ export function WorkflowBuilder() {
     addToast(`Running workflow: ${execPlan.label}`, "success");
     runExecutionPlan(workspacePath, execPlan, addToast);
   };
-
-  const stepMap = useMemo(() => {
-    const map = new Map<string, WorkflowStep>();
-    for (const s of steps) map.set(s.id, s);
-    return map;
-  }, [steps]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

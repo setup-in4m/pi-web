@@ -252,13 +252,20 @@ export function ChatView({ panel, panelIndex }: Props) {
   }
 
   if (!panel.workspacePath) {
+    const hasOtherWorkspace = panels.some((p) => p !== panel && p.workspacePath);
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center gap-1.5 text-[var(--color-t3)] px-4">
         <span className="text-2xl opacity-25">📂</span>
         <span className="text-xs font-medium text-[var(--color-t2)]">No workspace</span>
-        <span className="text-[10px] max-w-[200px] leading-relaxed">
-          Open a folder from the sidebar to start chatting with pi.
-        </span>
+        {hasOtherWorkspace ? (
+          <span className="text-[10px] max-w-[200px] leading-relaxed">
+            Another panel has a workspace open. Click a tab above to switch panels, or open a folder here.
+          </span>
+        ) : (
+          <span className="text-[10px] max-w-[200px] leading-relaxed">
+            Open a folder from the sidebar to start chatting with pi.
+          </span>
+        )}
         <button
           onClick={handleOpenFolder}
           className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors"

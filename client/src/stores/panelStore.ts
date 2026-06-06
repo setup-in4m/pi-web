@@ -154,7 +154,9 @@ export const usePanelStore = create<PanelState>((set, get) => {
       case "message_start":
         state.closeLiveThinking(event.sessionKey);
         state.resetStreamingTokens(event.sessionKey);
-        if (event.replace && event.text !== undefined) {
+        // Only replace if text is non-empty (server no longer sends text on message_start;
+        // this guards against duplicate text when text_deltas also stream same content).
+        if (event.replace && event.text) {
           state.replaceLastAssistant(event.sessionKey, event.text);
         }
         state.setStreaming(event.sessionKey, true);
@@ -1019,6 +1021,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         const panel = s.panels.find((p) => p.sessionKey === key);
         if (!panel) return s;
         const msgs = [...panel.messages];
+        const accumulatedContent = panel.thinkingContent + thinkingContent;
         // Search for existing live thinking block
         let existingIdx = -1;
         for (let i = msgs.length - 1; i >= Math.max(0, msgs.length - 5); i--) {
@@ -1028,17 +1031,17 @@ export const usePanelStore = create<PanelState>((set, get) => {
           }
         }
         if (existingIdx >= 0) {
-          // Update existing live thinking block
+          // Update existing live thinking block with accumulated content
           msgs[existingIdx] = {
             ...msgs[existingIdx],
-            content: renderLiveThinking({ content: thinkingContent, streaming: true }),
+            content: renderLiveThinking({ content: accumulatedContent, streaming: true }),
           };
         } else {
           // Create new live thinking block — insert BEFORE the plain-text message
           const textIdx = findTextMsgIdx(msgs);
           const thinkingMsg = {
             role: "assistant" as const,
-            content: renderLiveThinking({ content: thinkingContent, streaming: true }),
+            content: renderLiveThinking({ content: accumulatedContent, streaming: true }),
             timestamp: new Date().toISOString(),
           };
           if (textIdx >= 0) {
@@ -1049,7 +1052,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
         }
         return {
           panels: s.panels.map((p) =>
-            p.sessionKey === key ? { ...p, messages: msgs, thinkingContent: p.thinkingContent + thinkingContent } : p
+            p.sessionKey === key ? { ...p, messages: msgs, thinkingContent: accumulatedContent } : p
           ),
         };
       }),

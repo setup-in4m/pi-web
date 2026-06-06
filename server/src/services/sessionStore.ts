@@ -331,9 +331,9 @@ function subscribeSession(key: string, sessionId: string, session: any): void {
 
     switch (event.type) {
       case "message_start": {
-        rich.textDelta = false;
-        const content = event.message?.content;
-        rich.text = typeof content === "string" ? content : Array.isArray(content) ? content.map((b: any) => b.text || "").join("") : "";
+        // Signal new message without text so text_delta appends work correctly.
+        // pi SDK sends all content via text_delta events; including text here
+        // would duplicate whatever text_deltas also deliver.
         rich.replace = true;
         rich.eventType = "message_start";
         break;

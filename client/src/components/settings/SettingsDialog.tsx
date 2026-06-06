@@ -12,18 +12,35 @@ import type { Model } from "../../lib/api";
 // ── Models Tab ───────────────────────────────────────────
 
 function ModelsTab() {
-  const { models, providers, loading } = useModelStore();
+  const { models, providers, loading, loadModels } = useModelStore();
+
+  useEffect(() => {
+    if (models.length === 0 && providers.length === 0 && !loading) {
+      loadModels();
+    }
+  }, [models.length, providers.length, loading, loadModels]);
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-medium text-[var(--color-t2)]">Installed Models</div>
+        <button
+          onClick={() => loadModels()}
+          disabled={loading}
+          className="text-[var(--color-t3)] hover:text-[var(--color-t2)] transition-colors p-0.5"
+          title="Refresh models"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={loading ? "animate-spin" : ""}><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.36-3.36L21 8.5m-18 6a9 9 0 0 0 14.36 3.36L21 15.5"/></svg>
+        </button>
+      </div>
       {loading && <div className="text-[11px] text-[var(--color-t3)] italic">Loading models…</div>}
       {!loading && providers.length === 0 && (
-        <div className="text-[11px] text-[var(--color-t2)]">
+        <div className="text-[11px] text-[var(--color-t2)] p-3 rounded-lg border border-[var(--color-bd)] bg-[var(--color-bg3)]">
           <p>No models configured.</p>
-          <p className="mt-1">Run <code className="bg-[var(--color-bg3)] px-1 py-0.5 rounded text-[10px]">pi models</code> to manage providers and API keys.</p>
+          <p className="mt-1">Run <code className="bg-[var(--color-bg)] px-1 py-0.5 rounded text-[10px]">pi login</code> to add a provider, or <code className="bg-[var(--color-bg)] px-1 py-0.5 rounded text-[10px]">pi models</code> to manage models.</p>
         </div>
       )}
-      {providers.map((prov) => {
+      {!loading && providers.length > 0 && providers.map((prov) => {
         const provModels = models.filter((m) => m.providerId === prov);
         return (
           <div key={prov}>
@@ -232,7 +249,7 @@ export function SettingsDialog({ open, onClose }: Props) {
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-150 ${closing ? "opacity-0" : "opacity-100"}`}>
       <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
-      <div className="relative w-[520px] max-h-[80vh] bg-[var(--color-bg2)] border border-[var(--color-bdl)] rounded-xl shadow-2xl flex flex-col overflow-hidden z-10" ref={dialogRef} role="dialog" aria-modal="true" aria-label="Settings">
+      <div className="relative w-[520px] max-h-[90vh] bg-[var(--color-bg2)] border border-[var(--color-bdl)] rounded-xl shadow-2xl flex flex-col overflow-hidden z-10" ref={dialogRef} role="dialog" aria-modal="true" aria-label="Settings">
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-bd)] flex-shrink-0">
           <Settings size={16} className="text-[var(--color-accent)]" />
@@ -258,7 +275,7 @@ export function SettingsDialog({ open, onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 min-h-0 overflow-y-auto pt-4 px-4 pb-8 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--color-bd)] [&::-webkit-scrollbar-track]:bg-transparent">
           {activeTab === "appearance" && (
             <div className="flex flex-col gap-5">
               {/* Theme mode */}

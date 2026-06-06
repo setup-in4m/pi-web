@@ -126,9 +126,10 @@ export function ExtensionManager() {
             className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[var(--color-bgh)] transition-colors"
           >
             <div className="flex-1 min-w-0">
-              <div className="text-[12px] text-[var(--color-t1)]">{ext.name}</div>
+              <div className="text-[12px] text-[var(--color-t1)]">{ext.name || ext.id}</div>
               <div className="text-[10px] text-[var(--color-t3)]">
                 v{ext.version}
+                {ext.name && <span> · <code className="text-[9px]">{ext.id}</code></span>}
                 {ext.description && ` · ${ext.description}`}
               </div>
             </div>

@@ -16,16 +16,18 @@ import { useSettingsStore } from "./settingsStore";
 function mergeDelta(existing: string, chunk: string): string {
   if (!existing) return chunk;
   // Normalize: trim chunk's leading space, existing's trailing space for comparison
-  const rawChunk = chunk;
   const normExisting = existing.replace(/\s+$/, '');
   const normChunk = chunk.replace(/^\s+/, '');
   // Find longest suffix of normExisting that matches prefix of normChunk
   const maxOverlap = Math.min(normExisting.length, normChunk.length);
   for (let len = maxOverlap; len > 0; len--) {
     if (normExisting.slice(-len) === normChunk.slice(0, len)) {
+      // Full overlap = complete duplicate, skip
+      if (len === normChunk.length) return existing;
       // Preserve original spacing: use existing as-is, append only non-overlapping new chars
-      const originalNewEnd = chunk.slice(chunk.indexOf(normChunk.slice(len)));
-      return existing + originalNewEnd;
+      const remainder = normChunk.slice(len);
+      const offset = chunk.indexOf(remainder);
+      return existing + (offset >= 0 ? chunk.slice(offset) : remainder);
     }
   }
   return existing + chunk;

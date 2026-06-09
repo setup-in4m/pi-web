@@ -15,11 +15,17 @@ import { useSettingsStore } from "./settingsStore";
  */
 function mergeDelta(existing: string, chunk: string): string {
   if (!existing) return chunk;
-  // Find longest suffix of existing that matches prefix of chunk
-  const maxOverlap = Math.min(existing.length, chunk.length);
+  // Normalize: trim chunk's leading space, existing's trailing space for comparison
+  const rawChunk = chunk;
+  const normExisting = existing.replace(/\s+$/, '');
+  const normChunk = chunk.replace(/^\s+/, '');
+  // Find longest suffix of normExisting that matches prefix of normChunk
+  const maxOverlap = Math.min(normExisting.length, normChunk.length);
   for (let len = maxOverlap; len > 0; len--) {
-    if (existing.slice(-len) === chunk.slice(0, len)) {
-      return existing + chunk.slice(len);
+    if (normExisting.slice(-len) === normChunk.slice(0, len)) {
+      // Preserve original spacing: use existing as-is, append only non-overlapping new chars
+      const originalNewEnd = chunk.slice(chunk.indexOf(normChunk.slice(len)));
+      return existing + originalNewEnd;
     }
   }
   return existing + chunk;

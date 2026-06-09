@@ -8,7 +8,7 @@ const SVG_ICON = (
   </svg>
 );
 
-export function ToolWrite({ toolName, output, durationMs, isRunning }: ToolSharedProps) {
+export function ToolWrite({ output, durationMs, isRunning }: ToolSharedProps) {
   const label = isRunning ? "Writing file…" : "Edit applied";
   const lines = useMemo(() => {
     if (!output) return [];

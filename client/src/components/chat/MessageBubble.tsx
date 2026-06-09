@@ -1,6 +1,7 @@
 import { useMemo, useCallback, useState, useEffect, memo } from "react";
 import type { MessageRecord, ContentBlock } from "../../lib/api";
-import { renderMarkdown, escapeHtml } from "../../lib/markdown";
+import { renderMarkdown } from "../../lib/markdown";
+import { escapeHtml } from "../../lib/sanitize";
 import { formatTime } from "../../lib/time";
 import { useModelStore } from "../../stores/modelStore";
 import { usePanelStore } from "../../stores/panelStore";
@@ -137,10 +138,6 @@ export const MessageBubble = memo(function MessageBubble({ message, streaming, p
 
   const content = message.content ?? '';
   const defaultCollapsed = useSettingsStore((s) => s.thinkingCollapsed);
-  const hideThinking = usePanelStore((s) => {
-    if (panelIndex == null) return false;
-    return s.panels[panelIndex]?.hideThinking ?? false;
-  });
 
   /** For user messages or messages without blocks: render markdown/plain text */
   const formatted = useMemo<string>(() => {

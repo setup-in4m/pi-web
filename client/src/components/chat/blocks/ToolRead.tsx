@@ -11,7 +11,7 @@ const SVG_ICON = (
   </svg>
 );
 
-export function ToolRead({ toolName, output, durationMs, isRunning }: ToolSharedProps) {
+export function ToolRead({ output, durationMs, isRunning }: ToolSharedProps) {
   const label = isRunning ? "Reading file…" : "File read";
   const rows = useMemo(() => {
     if (!output) return [];

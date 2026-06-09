@@ -9,7 +9,7 @@ const SVG_ICON = (
   </svg>
 );
 
-export function ToolBash({ toolName, output, durationMs, isRunning }: ToolSharedProps) {
+export function ToolBash({ output, durationMs, isRunning }: ToolSharedProps) {
   const label = isRunning ? "Running command…" : "Command completed";
   const truncated = useMemo(() => {
     if (!output) return "";

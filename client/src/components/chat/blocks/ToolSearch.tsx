@@ -9,7 +9,7 @@ const SVG_ICON = (
   </svg>
 );
 
-export function ToolSearch({ toolName, output, durationMs, isRunning }: ToolSharedProps) {
+export function ToolSearch({ output, durationMs, isRunning }: ToolSharedProps) {
   const label = isRunning ? "Searching…" : "Search results";
   const parsed = useMemo(() => {
     if (!output) return [];

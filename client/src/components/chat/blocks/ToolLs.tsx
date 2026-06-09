@@ -8,7 +8,7 @@ const SVG_ICON = (
   </svg>
 );
 
-export function ToolLs({ toolName, output, durationMs, isRunning }: ToolSharedProps) {
+export function ToolLs({ output, durationMs, isRunning }: ToolSharedProps) {
   const label = isRunning ? "Listing directory…" : "Directory listing";
   const { dirs, files, raw } = useMemo(() => {
     if (!output) return { dirs: [] as string[], files: [] as string[], raw: "" };

@@ -20,7 +20,6 @@ import { subscribe as wsSubscribe, onReconnect } from "../lib/ws";
 import * as api from "../lib/api";
 import { usePanelStore } from "./panelStore";
 import { useSettingsStore } from "./settingsStore";
-import { useToastStore } from "./toastStore";
 import { blocksToHtml } from "./messageUtils";
 import { escapeHtml } from "../lib/sanitize";
 
@@ -131,8 +130,9 @@ export function initPanelEvents(): void {
         let toolCallId = `tc_${Date.now().toString(36)}`;
         const curBlocks = panel.streamingBlocks;
         for (let i = curBlocks.length - 1; i >= 0; i--) {
-          if (curBlocks[i].type === "tool_start" && curBlocks[i].toolName === event.toolName) {
-            toolCallId = curBlocks[i].toolCallId;
+          const b = curBlocks[i];
+          if (b.type === "tool_start" && b.toolName === event.toolName) {
+            toolCallId = b.toolCallId;
             break;
           }
         }
@@ -222,9 +222,11 @@ export function initPanelEvents(): void {
           if (!panel) return s;
           // Find the subAgentId's task from the most recent subagent_start block
           let task = "";
-          for (let i = panel.streamingBlocks.length - 1; i >= 0; i--) {
-            if (panel.streamingBlocks[i].type === "subagent_start" && panel.streamingBlocks[i].subAgentId === event.subAgentId) {
-              task = panel.streamingBlocks[i].task;
+          const sblocks = panel.streamingBlocks;
+          for (let i = sblocks.length - 1; i >= 0; i--) {
+            const b = sblocks[i];
+            if (b.type === "subagent_start" && b.subAgentId === event.subAgentId) {
+              task = b.task;
               break;
             }
           }
@@ -234,8 +236,9 @@ export function initPanelEvents(): void {
               const blocks: ContentBlock[] = [...p.streamingBlocks];
               let found = false;
               for (let i = blocks.length - 1; i >= 0; i--) {
-                if (blocks[i].type === "subagent_delta" && blocks[i].subAgentId === event.subAgentId) {
-                  (blocks as any)[i] = { ...blocks[i], content: (blocks[i] as Extract<ContentBlock, { type: "subagent_delta" }>).content + event.text! };
+                const b = blocks[i];
+                if (b.type === "subagent_delta" && b.subAgentId === event.subAgentId) {
+                  (blocks as any)[i] = { ...b, content: b.content + event.text! };
                   found = true;
                   break;
                 }
@@ -258,9 +261,11 @@ export function initPanelEvents(): void {
           if (!panel) return s;
           // Find the subAgentId's task
           let task = "";
-          for (let i = panel.streamingBlocks.length - 1; i >= 0; i--) {
-            if (panel.streamingBlocks[i].type === "subagent_start" && panel.streamingBlocks[i].subAgentId === event.subAgentId) {
-              task = panel.streamingBlocks[i].task;
+          const eblocks = panel.streamingBlocks;
+          for (let i = eblocks.length - 1; i >= 0; i--) {
+            const b = eblocks[i];
+            if (b.type === "subagent_start" && b.subAgentId === event.subAgentId) {
+              task = b.task;
               break;
             }
           }
@@ -283,9 +288,11 @@ export function initPanelEvents(): void {
           const panel = s.panels.find((p) => p.sessionKey === event.sessionKey);
           if (!panel) return s;
           let task = "";
-          for (let i = panel.streamingBlocks.length - 1; i >= 0; i--) {
-            if (panel.streamingBlocks[i].type === "subagent_start" && panel.streamingBlocks[i].subAgentId === event.subAgentId) {
-              task = panel.streamingBlocks[i].task;
+          const errblocks = panel.streamingBlocks;
+          for (let i = errblocks.length - 1; i >= 0; i--) {
+            const b = errblocks[i];
+            if (b.type === "subagent_start" && b.subAgentId === event.subAgentId) {
+              task = b.task;
               break;
             }
           }

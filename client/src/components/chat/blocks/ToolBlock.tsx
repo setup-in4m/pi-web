@@ -1,4 +1,4 @@
-import { classifyTool, type ToolType } from "../../../lib/tools";
+import { classifyTool } from "../../../lib/tools";
 import type { ContentBlock } from "../../../lib/api";
 import { ToolRead } from "./ToolRead";
 import { ToolWrite } from "./ToolWrite";

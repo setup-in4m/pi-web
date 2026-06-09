@@ -5,7 +5,7 @@ import { useToastStore } from "./toastStore";
 import { escapeHtml } from "../lib/sanitize";
 import { useModelStore } from "./modelStore";
 import { useSettingsStore } from "./settingsStore";
-import { isInfrastructureMsg, findTextMsgIdx, blocksToHtml, nextThinkId } from "./messageUtils";
+import { blocksToHtml, nextThinkId } from "./messageUtils";
 
 export interface PanelData {
   id: number;
@@ -54,18 +54,6 @@ interface PanelState extends PanelSlice {
   createAndSend: (index: number, message: string) => Promise<void>;
   sendMessage: (index: number, message: string) => Promise<void>;
   openExistingSession: (index: number, workspacePath: string, sessionId: string) => Promise<void>;
-
-  appendMessage: (key: string, message: MessageRecord) => void;
-  updateLastAssistant: (key: string, content: string) => void;
-  replaceLastAssistant: (key: string, content: string) => void;
-  setStreaming: (key: string, streaming: boolean) => void;
-  setUsage: (key: string, usage: UsageInfo) => void;
-  setThinkingContent: (key: string, content: string) => void;
-  flushThinking: (key: string) => void;
-  setStreamingTokens: (key: string, tokens: number) => void;
-  addThinkingTokens: (key: string, tokens: number) => void;
-  resetThinkingTokens: (key: string) => void;
-  resetStreamingTokens: (key: string) => void;
 
   getByKey: (key: string) => PanelData | undefined;
 
@@ -372,16 +360,6 @@ export const usePanelStore = create<PanelState>((set, get) => {
         }));
       }
     },
-
-    setStreaming: (key, streaming) =>
-      set((s) => ({
-        panels: s.panels.map((p) => p.sessionKey === key ? { ...p, streaming } : p),
-      })),
-
-    setUsage: (key, usage) =>
-      set((s) => ({
-        panels: s.panels.map((p) => p.sessionKey === key ? { ...p, usage } : p),
-      })),
 
     getByKey: (key) => get().panels.find((p) => p.sessionKey === key),
 

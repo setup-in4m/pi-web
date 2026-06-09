@@ -53,25 +53,20 @@ describe("block architecture", () => {
 
     it("thinking blocks merge via upsert pattern", () => {
       const blocks: ContentBlock[] = [];
-      // Simulate upsertBlock logic
-      const newBlock: ContentBlock = { type: "thinking", content: "Let me think" };
-      const last = blocks[blocks.length - 1];
-      if (last && last.type === newBlock.type) {
-        blocks[blocks.length - 1] = { ...last, content: last.content + newBlock.content };
-      } else {
-        blocks.push(newBlock);
-      }
-      // Second chunk should merge
-      const nextBlock: ContentBlock = { type: "thinking", content: " about this" };
-      const l = blocks[blocks.length - 1];
-      if (l && l.type === nextBlock.type) {
-        blocks[blocks.length - 1] = { ...l, content: l.content + nextBlock.content };
-      } else {
-        blocks.push(nextBlock);
-      }
+      // Simulate upsertBlock logic (manual type narrowing for union type)
+      const upsert = (arr: ContentBlock[], b: ContentBlock) => {
+        const last = arr[arr.length - 1];
+        if (last && last.type === b.type && 'content' in last && 'content' in b) {
+          arr[arr.length - 1] = { type: last.type as any, content: (last as any).content + (b as any).content } as ContentBlock;
+        } else {
+          arr.push(b);
+        }
+      };
+      upsert(blocks, { type: "thinking", content: "Let me think" });
+      upsert(blocks, { type: "thinking", content: " about this" });
       expect(blocks).toHaveLength(1);
       expect(blocks[0].type).toBe("thinking");
-      expect(blocks[0].content).toBe("Let me think about this");
+      expect((blocks[0] as any).content).toBe("Let me think about this");
     });
 
     it("tool blocks do NOT merge (each is separate)", () => {

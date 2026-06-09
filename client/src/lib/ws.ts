@@ -37,7 +37,11 @@ export function isConnected(): boolean {
 }
 
 export function connect(): void {
-  if (ws && ws.readyState === WebSocket.OPEN) return;
+  // Close any stale WebSocket left by Vite HMR
+  if (ws) {
+    try { ws.close(); } catch {}
+    ws = null;
+  }
 
   // In production (Tauri), connect to the Node server directly.
   // In dev, use the current host (Vite proxies /ws).

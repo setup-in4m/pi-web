@@ -264,9 +264,13 @@ export const usePanelStore = create<PanelState>((set, get) => {
             panels: s.panels.map((p) => {
               if (p.sessionKey !== event.sessionKey) return p;
               const blocks = [...p.streamingBlocks];
-              const last = blocks[blocks.length - 1];
-              if (last && last.type === "thinking") {
-                blocks[blocks.length - 1] = { ...last, content: mergeDelta(last.content, event.text!) };
+              // Find last thinking block (text_delta may have interrupted), or create new
+              let thinkIdx = -1;
+              for (let i = blocks.length - 1; i >= 0; i--) {
+                if (blocks[i].type === "thinking") { thinkIdx = i; break; }
+              }
+              if (thinkIdx >= 0) {
+                blocks[thinkIdx] = { ...blocks[thinkIdx], content: mergeDelta(blocks[thinkIdx].content, event.text!) };
               } else {
                 blocks.push({ type: "thinking", content: event.text! });
               }

@@ -77,8 +77,6 @@ interface PanelState extends PanelSlice {
 
   // Sub-agents
   spawnSubAgent: (index: number, task: string, options?: { model?: string; thinking?: string }) => Promise<void>;
-  updateSubAgentCard: (key: string, subAgentId: string, content: string) => void;
-  finalizeSubAgentCard: (key: string, subAgentId: string, result: string, usage?: UsageInfo) => void;
   branchFromMessage: (sourceIndex: number, messageIndex: number) => Promise<void>;
 
   // Pinning
@@ -616,21 +614,8 @@ export const usePanelStore = create<PanelState>((set, get) => {
     spawnSubAgent: async (index, task, options) => {
       const panel = get().panels[index];
       if (!panel?.sessionKey) return;
-
-      // Add running sub-agent card
-      set((s) => ({
-        panels: s.panels.map((p, i) =>
-          i === index ? {
-            ...p,
-            messages: [...p.messages, {
-              role: "assistant" as const,
-              content: renderSubAgentStart("pending", task),
-              timestamp: new Date().toISOString(),
-            }],
-          } : p
-        ),
-      }));
-
+      // Server sends subagent_start/end events → handled by panelEvents.ts
+      // which adds blocks to the streaming message. No separate message needed.
       try {
         await api.spawnSubAgent(panel.sessionKey, task, options);
       } catch (e: any) {

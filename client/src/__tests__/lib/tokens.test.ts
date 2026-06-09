@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { escapeHtml } from "../../lib/sanitize";
-import {
-  classifyTool,
-  renderToolStart,
-  renderToolEnd,
-} from "../../lib/tools";
+import { classifyTool } from "../../lib/tools";
 
 describe("classifyTool", () => {
   it("classifies read tools", () => {
@@ -47,42 +43,7 @@ describe("classifyTool", () => {
   });
 
   it("returns unknown for unrecognized", () => {
-    // Note: classifyTool uses .includes(), so avoid substrings like "ls" or "edit"
     expect(classifyTool("foobar_baz_qux")).toBe("unknown");
-  });
-});
-
-describe("renderToolStart", () => {
-  it("renders running tool card", () => {
-    const result = renderToolStart({ toolName: "read_file", toolInput: { filePath: "/src/app.ts" } });
-    expect(result).toContain("tool-running");
-    expect(result).toContain("app.ts");
-  });
-
-  it("shows command for bash tools", () => {
-    const result = renderToolStart({ toolName: "bash", toolInput: { command: "npm test" } });
-    expect(result).toContain("npm test");
-  });
-});
-
-describe("renderToolEnd", () => {
-  it("renders collapsible tool card", () => {
-    const result = renderToolEnd({ toolName: "read_file", toolOutput: "file contents here" });
-    expect(result).toContain("<details");
-    expect(result).toContain("file contents here");
-  });
-
-  it("renders bash output", () => {
-    const result = renderToolEnd({ toolName: "bash", toolOutput: "test passed" });
-    expect(result).toContain("test passed");
-    expect(result).toContain("completed");
-  });
-
-  it("truncates large outputs", () => {
-    const bigOutput = "x".repeat(6000);
-    const result = renderToolEnd({ toolName: "read_file", toolOutput: bigOutput });
-    expect(result).toContain("truncated");
-    expect(result.length).toBeLessThan(bigOutput.length + 500);
   });
 });
 

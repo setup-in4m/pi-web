@@ -281,7 +281,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
                 messages: msgs,
                 streamingBlocks: blocks,
                 thinkingTokens: (p.thinkingTokens || 0) + thinkingTokens,
-                thinkingContent: p.thinkingContent + event.text,
+                thinkingContent: mergeDelta(p.thinkingContent, event.text!),
                 thinkingStartTime: p.thinkingStartTime ?? Date.now(),
               };
             }),
@@ -1409,7 +1409,7 @@ function renderSubAgentDone(id: string, task: string, result: string, usage?: { 
  *  When hideThinking=false but defaultCollapsed=true, sections render collapsed
  *  but the user can still expand them by clicking.
  *  @param extraThinkId - optional panelId-msgIdx for toggle state tracking */
-function blocksToHtml(blocks: ContentBlock[], hideThinking: boolean, thinkingStartTime?: number | null, defaultCollapsed?: boolean, extraThinkId?: string): string {
+export function blocksToHtml(blocks: ContentBlock[], hideThinking: boolean, thinkingStartTime?: number | null, defaultCollapsed?: boolean, extraThinkId?: string): string {
   if (!blocks || !blocks.length) return '';
   let html = '';
   const thinkTime = thinkingStartTime ? Math.round((Date.now() - thinkingStartTime) / 1000) : undefined;

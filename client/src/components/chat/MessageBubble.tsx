@@ -3,7 +3,7 @@ import type { MessageRecord } from "../../lib/api";
 import { renderMarkdown, escapeHtml } from "../../lib/markdown";
 import { formatTime } from "../../lib/time";
 import { useModelStore } from "../../stores/modelStore";
-import { usePanelStore } from "../../stores/panelStore";
+import { usePanelStore, blocksToHtml } from "../../stores/panelStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 
 interface Props {
@@ -154,6 +154,10 @@ export const MessageBubble = memo(function MessageBubble({ message, streaming, p
 
   const content = message.content ?? '';
   const defaultCollapsed = useSettingsStore((s) => s.thinkingCollapsed);
+  const hideThinking = usePanelStore((s) => {
+    if (panelIndex == null) return false;
+    return s.panels[panelIndex]?.hideThinking ?? false;
+  });
 
   const formatted = useMemo<string>(() => {
     if (isUser) return formatSimple(content);
@@ -173,12 +177,16 @@ export const MessageBubble = memo(function MessageBubble({ message, streaming, p
     }
 
     // After streaming: render full markdown or use blocks HTML
-    if (hasBlocks) {
-      return content; // content was pre-built from blocks via blocksToHtml
+    if (hasBlocks && message.blocks) {
+      // Convert blocks to proper HTML with thinking sections (for historical messages)
+      if (message.content.includes('thinking-section')) {
+        return message.content; // already has HTML from agent_end
+      }
+      return blocksToHtml(message.blocks, hideThinking, null, defaultCollapsed);
     }
 
     return renderMarkdown(content);
-  }, [content, message.blocks, isUser, streaming, isPureInfra, hasBlocks]);
+  }, [content, message.blocks, isUser, streaming, isPureInfra, hasBlocks, hideThinking, defaultCollapsed]);
 
   // During streaming with blocks, render each block as a React element.
   // Each ThinkingBlock manages its own collapse state — toggle survives re-renders.

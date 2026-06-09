@@ -8,30 +8,7 @@ import { createThinkingSectionRaw, escapeHtml, renderMarkdown } from "../lib/mar
 import { useModelStore } from "./modelStore";
 import { useSettingsStore } from "./settingsStore";
 
-/**
- * Merge a new text chunk into existing content, stripping any overlap at word boundaries.
- * Some providers (DeepSeek with thinking) emit chunks that repeat the tail of the previous chunk.
- * E.g. existing="Hello world " chunk="world foo" → result="Hello world foo"
- */
-function mergeDelta(existing: string, chunk: string): string {
-  if (!existing) return chunk;
-  // Normalize: trim chunk's leading space, existing's trailing space for comparison
-  const normExisting = existing.replace(/\s+$/, '');
-  const normChunk = chunk.replace(/^\s+/, '');
-  // Find longest suffix of normExisting that matches prefix of normChunk
-  const maxOverlap = Math.min(normExisting.length, normChunk.length);
-  for (let len = maxOverlap; len > 0; len--) {
-    if (normExisting.slice(-len) === normChunk.slice(0, len)) {
-      // Full overlap = complete duplicate, skip
-      if (len === normChunk.length) return existing;
-      // Preserve original spacing: use existing as-is, append only non-overlapping new chars
-      const remainder = normChunk.slice(len);
-      const offset = chunk.indexOf(remainder);
-      return existing + (offset >= 0 ? chunk.slice(offset) : remainder);
-    }
-  }
-  return existing + chunk;
-}
+
 
 export interface PanelData {
   id: number;
@@ -233,8 +210,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
               const blocks = [...p.streamingBlocks];
               const last = blocks[blocks.length - 1];
               if (last && last.type === "text") {
-                // Overlap dedup: some providers send chunks overlapping at word boundaries
-                blocks[blocks.length - 1] = { ...last, content: mergeDelta(last.content, event.text!) };
+                blocks[blocks.length - 1] = { ...last, content: last.content + event.text };
               } else {
                 blocks.push({ type: "text", content: event.text! });
               }
@@ -272,7 +248,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
                 if (blocks[i].type === "thinking") { thinkIdx = i; break; }
               }
               if (thinkIdx >= 0) {
-                blocks[thinkIdx] = { ...blocks[thinkIdx], content: mergeDelta(blocks[thinkIdx].content, event.text!) };
+                blocks[thinkIdx] = { ...blocks[thinkIdx], content: blocks[thinkIdx].content + event.text };
               } else {
                 blocks.push({ type: "thinking", content: event.text! });
               }
@@ -293,7 +269,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
                 messages: msgs,
                 streamingBlocks: blocks,
                 thinkingTokens: (p.thinkingTokens || 0) + thinkingTokens,
-                thinkingContent: mergeDelta(p.thinkingContent, event.text!),
+                thinkingContent: p.thinkingContent + event.text,
                 thinkingStartTime: p.thinkingStartTime ?? Date.now(),
               };
             }),

@@ -63,7 +63,13 @@ function mapMessage(m: any): any {
 
 export async function open(workspacePath: string, sessionId: string): Promise<{ key: string; title: string; messageCount: number; usage: any; messages: any[] }> {
   const key = `${workspacePath}::${sessionId}`;
-  if (activeSessions.has(key)) return { key, title: "", messageCount: 0, usage: {}, messages: [] };
+  // Already active — return current messages instead of empty
+  const existing = activeSessions.get(key);
+  if (existing) {
+    const msgs = (existing.session as any).messages || [];
+    const messages = msgs.map(mapMessage);
+    return { key, title: "", messageCount: msgs.length, usage: {}, messages };
+  }
 
   const infos = await SessionManager.list(workspacePath);
   const info = infos.find(i => i.id === sessionId);

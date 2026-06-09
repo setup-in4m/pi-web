@@ -113,7 +113,7 @@ export const fetchWorkspaces = () =>
   api.get<{ workspaces: { path: string; name: string; addedAt: string }[] }>("/api/workspaces");
 
 export const openSession = (workspacePath: string, sessionId: string) =>
-  api.post<{ ok: boolean; key: string; title: string; messageCount: number; usage: UsageInfo }>(
+  api.post<{ ok: boolean; key: string; title: string; messageCount: number; usage: UsageInfo; messages: MessageRecord[] }>(
     "/api/session/open",
     { workspacePath, sessionId }
   );

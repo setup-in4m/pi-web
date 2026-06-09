@@ -208,7 +208,15 @@ export const usePanelStore = create<PanelState>((set, get) => {
               const blocks = [...p.streamingBlocks];
               const last = blocks[blocks.length - 1];
               if (last && last.type === "text") {
-                blocks[blocks.length - 1] = { ...last, content: last.content + event.text };
+                // Dedup: some providers (DeepSeek) send full text in each delta
+                const text = event.text!;
+                const existing = last.content;
+                const deduped = text.length > existing.length && text.startsWith(existing)
+                  ? text  // full-text resend — replace
+                  : existing.endsWith(text)
+                    ? existing  // duplicate — skip
+                    : existing + text;  // normal delta — append
+                blocks[blocks.length - 1] = { ...last, content: deduped };
               } else {
                 blocks.push({ type: "text", content: event.text! });
               }
@@ -242,7 +250,14 @@ export const usePanelStore = create<PanelState>((set, get) => {
               const blocks = [...p.streamingBlocks];
               const last = blocks[blocks.length - 1];
               if (last && last.type === "thinking") {
-                blocks[blocks.length - 1] = { ...last, content: last.content + event.text };
+                const text = event.text!;
+                const existing = last.content;
+                const deduped = text.length > existing.length && text.startsWith(existing)
+                  ? text  // full-text resend — replace
+                  : existing.endsWith(text)
+                    ? existing  // duplicate — skip
+                    : existing + text;  // normal delta — append
+                blocks[blocks.length - 1] = { ...last, content: deduped };
               } else {
                 blocks.push({ type: "thinking", content: event.text! });
               }
@@ -313,6 +328,12 @@ export const usePanelStore = create<PanelState>((set, get) => {
               } else {
                 msgs.push({ role: "assistant", content: html, blocks, timestamp: new Date().toISOString() });
               }
+            } else {
+              // No streaming blocks at all — remove the empty streaming placeholder
+              const cleaned = msgs.filter((m) =>
+                !(m.role === "assistant" && m.content === "" && m.blocks && m.blocks.length === 0)
+              );
+              if (cleaned.length < msgs.length) msgs.splice(0, msgs.length, ...cleaned);
             }
             return {
               ...p,
@@ -615,20 +636,13 @@ export const usePanelStore = create<PanelState>((set, get) => {
         const s = get();
         const next: PanelSlice = {
           panels: s.panels.map((p, i) =>
-            i === index ? { ...p, workspacePath, sessionKey: result.key, sessionId, title: result.title, messages: [], usage: result.usage } : p
+            i === index ? { ...p, workspacePath, sessionKey: result.key, sessionId, title: result.title, messages: result.messages, usage: result.usage, loadingMessages: false } : p
           ),
           activeIndex: s.activeIndex,
           nextId: s.nextId,
         };
         set(next);
         persist(next);
-
-        const transcript = await api.getTranscript(result.key);
-        set((s) => ({
-          panels: s.panels.map((p, i) =>
-            i === index ? { ...p, messages: transcript.transcript, usage: transcript.usage, loadingMessages: false } : p
-          ),
-        }));
       } catch (e: any) {
         useToastStore.getState().addToast(e.message, "error");
         set((s) => ({

@@ -36,9 +36,34 @@ export function all(): Map<string, ActiveSession> {
   return activeSessions;
 }
 
-export async function open(workspacePath: string, sessionId: string): Promise<{ key: string; title: string; messageCount: number; usage: any }> {
+/** Map a pi SDK message to pi-web MessageRecord */
+function mapMessage(m: any): any {
+  const role = m.role || (m.type === "user" ? "user" : "assistant");
+  const ts = m.timestamp || new Date().toISOString();
+  if (Array.isArray(m.content)) {
+    const blocks: Array<{ type: "text" | "thinking"; content: string }> = [];
+    for (const c of m.content) {
+      if (c.type === "text" && c.text) {
+        blocks.push({ type: "text", content: c.text });
+      } else if (c.type === "thinking" && c.thinking) {
+        blocks.push({ type: "thinking", content: c.thinking });
+      }
+    }
+    const plainText = blocks.filter(b => b.type === "text").map(b => b.content).join("\n");
+    if (blocks.length > 0) {
+      return { role, content: plainText, blocks, timestamp: ts };
+    }
+  }
+  return {
+    role,
+    content: typeof m.content === "string" ? m.content : "",
+    timestamp: ts,
+  };
+}
+
+export async function open(workspacePath: string, sessionId: string): Promise<{ key: string; title: string; messageCount: number; usage: any; messages: any[] }> {
   const key = `${workspacePath}::${sessionId}`;
-  if (activeSessions.has(key)) return { key, title: "", messageCount: 0, usage: {} };
+  if (activeSessions.has(key)) return { key, title: "", messageCount: 0, usage: {}, messages: [] };
 
   const infos = await SessionManager.list(workspacePath);
   const info = infos.find(i => i.id === sessionId);
@@ -58,6 +83,7 @@ export async function open(workspacePath: string, sessionId: string): Promise<{ 
 
   const msgs = (session as any).messages || [];
   const usage = (session as any).getContextUsage?.() || (session as any).getSessionStats?.() || {};
+  const messages = msgs.map(mapMessage);
 
   store.upsertSession({
     key, workspacePath, sessionId,
@@ -66,7 +92,7 @@ export async function open(workspacePath: string, sessionId: string): Promise<{ 
     lastActiveAt: new Date().toISOString(),
   });
 
-  return { key, title: info.name || "(untitled)", messageCount: msgs.length, usage };
+  return { key, title: info.name || "(untitled)", messageCount: msgs.length, usage, messages };
 }
 
 export async function create(
@@ -161,31 +187,7 @@ export async function getTranscript(key: string): Promise<{ transcript: any[]; u
   const msgs = (entry.session as any).messages || [];
   const usage = (entry.session as any).getContextUsage?.() || {};
   return {
-    transcript: msgs.map((m: any) => {
-      const role = m.role || (m.type === "user" ? "user" : "assistant");
-      const ts = m.timestamp || new Date().toISOString();
-      // Preserve structured content when available (SDK format: array of {type, text/thinking})
-      if (Array.isArray(m.content)) {
-        const blocks: Array<{ type: "text" | "thinking"; content: string }> = [];
-        for (const c of m.content) {
-          if (c.type === "text" && c.text) {
-            blocks.push({ type: "text", content: c.text });
-          } else if (c.type === "thinking" && c.thinking) {
-            blocks.push({ type: "thinking", content: c.thinking });
-          }
-        }
-        const plainText = blocks.filter(b => b.type === "text").map(b => b.content).join("\n");
-        if (blocks.length > 0) {
-          return { role, content: plainText, blocks, timestamp: ts };
-        }
-      }
-      // Fallback: plain string content
-      return {
-        role,
-        content: typeof m.content === "string" ? m.content : "",
-        timestamp: ts,
-      };
-    }),
+    transcript: msgs.map(mapMessage),
     usage,
   };
 }
@@ -384,9 +386,6 @@ function subscribeSession(key: string, sessionId: string, session: any): void {
 
     switch (event.type) {
       case "message_start": {
-        // Signal new message without text so text_delta appends work correctly.
-        // pi SDK sends all content via text_delta events; including text here
-        // would duplicate whatever text_deltas also deliver.
         rich.replace = true;
         rich.eventType = "message_start";
         break;

@@ -1,330 +1,481 @@
-# Implementation Plan — pi-web Remaining Items
+# Implementation Plan — Message Architecture Refactor
 
-## Current State
-Client builds (133KB JS gzipped). Server compiles. Tauri scaffold exists. Core chat, multi-panel, sub-agents, agent profiles, theming, virtual scroll, layout presets all functional.
-
-## 5 Parallel Work Streams
+## Goal
+Replace fragile HTML-string message system with block-based architecture. Tools, thinking, text all blend into ONE streaming assistant message per turn. No more separate infra messages. No more duplicate escapeHtml. Split panelStore.ts. Delete old cruft.
 
 ---
 
-## Stream 1: Rich Tool Rendering & Content
+## Architecture Change
 
-### 1.1 — Tool Card Enhancements
-**File:** `client/src/lib/tools.ts`
-- Replace current `renderToolBody()` with type-specific renderers
-- **Read tool:** Show file path, rendered content with line numbers (`<table>` with line-number column)
-- **Write tool:** Show file path, unified diff view (add `diff` library or simple +/- prefix rendering)
-- **Edit tool:** Show unified diff view (same renderer as write)
-- **Bash tool:** Show command, exit code badge (green/red), stdout, stderr in separate blocks
-- **Grep/Find tool:** Results table with file:line:match columns
-- **Ls tool:** File tree with directories first, indent levels, file/dir icons
-- **Add:** Tool execution time display (pass `durationMs` from server events, show in tool card summary)
+### Before
+```
+user msg → assistant msg (empty placeholder)
+       → tool_start → separate assistant msg (HTML string)
+       → thinking_delta → separate live thinking msg
+       → text_delta → updates assistant msg
+       → tool_end → separate assistant msg (HTML string)
+       → agent_end → freezes blocks, removes empty placeholder
+```
+Result: 5-10 assistant entries per turn. Virtualizer renders each as separate item with "pi" role label.
 
-### 1.2 — Inline Images
-**File:** `client/src/lib/markdown.ts`
-- Add `image()` renderer to marked custom renderer
-- Render `<img>` tags with max-width, border-radius, click-to-enlarge
-
-### 1.3 — Thinking Token Count
-**File:** `client/src/components/panel/TokenBar.tsx`
-- Accept `thinkingTokens` prop
-- Show split: "think:42K · out:128K" when both present
-**File:** `server/src/ws/handler.ts` (already broadcasts thinking_delta)
-- Track thinking char count per session, include in usage estimate
-**File:** `client/src/stores/panelStore.ts`
-- Add `thinkingTokens` field to PanelData
-- Count thinking characters, estimate tokens (chars/4)
-
-### 1.4 — Pin Message
-**File:** `client/src/stores/panelStore.ts`
-- Add `pinnedIndices: Set<number>` to PanelData
-- Add `pinMessage(panelIdx, msgIdx)` / `unpinMessage(panelIdx, msgIdx)` actions
-**File:** `client/src/components/chat/ChatView.tsx`
-- Render pinned messages at top of chat in sticky container
-- Add pin/unpin button to message action bar (existing group-hover row)
-- Pin icon in action bar for all message roles
-
-### Acceptance
-- Tool cards render type-specific output (line numbers, diffs, tables, file tree)
-- Images appear inline in assistant messages
-- Thinking blocks show token count
-- Pinned messages stick to top of chat, can be unpinned
+### After
+```
+user msg → assistant msg (with blocks: [])
+       → tool_start → adds block{type:"tool_start"} to streamingBlocks
+       → thinking_delta → adds block{type:"thinking"} to streamingBlocks  
+       → text_delta → adds block{type:"text"} to streamingBlocks
+       → tool_end → updates matching tool_start block with result
+       → agent_end → freezes blocks, renders all as one message
+```
+Result: 1 assistant message per turn. Blocks render inline as React components.
 
 ---
 
-## Stream 2: Advanced Model & Token UX
+## Dependency Graph
 
-### 2.1 — Searchable Model Selector
-**File:** `client/src/components/panel/ModelSelector.tsx` (NEW)
-- Replace `<select>` in PanelHeader with custom dropdown
-- Search input at top, fuzzy-match model names
-- Group by provider with provider headers
-- Show context window, cost/token, thinking support on each row
-- "Recently used" section at top (persist last 5 in localStorage)
+```
+Phase 0: Cleanup (no deps) ──────────────────────────────────
+  Delete _old/, stale plan/progress files
 
-**File:** `client/src/stores/modelStore.ts`
-- Add `recentModels: string[]` (providerId/modelId pairs)
-- Add `addRecentModel(providerId, modelId)` action
-- Persist to localStorage
+Phase 1: Foundation (no deps between tasks) ─────────────────
+  A. Create client/src/lib/sanitize.ts           (standalone)
+  B. Extend ContentBlock types in api.ts          (standalone)
+  C. Server escapeHtml → shared import            (standalone)
 
-**File:** `client/src/components/panel/PanelHeader.tsx`
-- Replace `<select>` with `<ModelSelector />`
+Phase 2: Extraction (depends on Phase 1) ────────────────────
+  A. Create messageUtils.ts from panelStore.ts    (needs types)
+  B. Create thinking.ts from markdown.ts          (needs sanitize.ts)
+  C. Create block renderer components             (needs types)
 
-### 2.2 — Model Cards with Details
-**File:** `client/src/components/panel/ModelSelector.tsx`
-- Each model row shows:
-  - Display name (bold)
-  - Provider badge (small, muted)
-  - Context window (e.g., "128K")
-  - Cost per 1M tokens (input/output)
-  - "recommended" star badge on models like claude-sonnet-4-20250514, gpt-4o
-- Add `isRecommended(modelId, providerId)` helper (hardcoded list)
+Phase 3: Core Rewrite (depends on Phase 2) ──────────────────
+  A. Create panelEvents.ts — new WebSocket handler (accumulates blocks)
+  B. Rewrite MessageBubble.tsx — dispatch to block components
+  C. Slim panelStore.ts — remove inline event handler, sub-agent builders
 
-### 2.3 — Real-time Token Counter
-**File:** `client/src/stores/panelStore.ts`
-- Add `inputTokens: number`, `outputTokens: number` to PanelData
-- Update from WebSocket `agent_end` event's `usage` field (already received)
-- Track streaming estimate in `streamingOutputTokens` (already exists)
+Phase 4: Cleanup (depends on Phase 3) ───────────────────────
+  A. Delete HTML string builders from tools.ts (keep classifyTool)
+  B. Delete sub-agent HTML renderers from panelStore.ts
+  C. Update tests for new block architecture
+  D. Build + test verification
 
-### 2.4 — Session Cost & Token Summary
-**File:** `client/src/components/sidebar/Sidebar.tsx`
-- For each session in workspace tree, show cost estimate if available
-- Show token count next to session title (small, muted)
-- Derive from stored usage data
-
-**File:** `client/src/stores/workspaceStore.ts`
-- Add `refreshAllUsage()` action that calls `GET /api/session/:key/usage` for loaded sessions
-
-**File:** `server/src/routes/workspace.ts`
-- `GET /api/workspace/:enc` already returns data; enhance to include per-session usage if sessions are loaded
-
-### 2.5 — Context Compaction
-**File:** `client/src/components/panel/TokenBar.tsx`
-- When danger threshold hit (90%), show "Compact" button next to warning
-- Click calls `POST /api/session/:key/compact`
-
-**File:** `server/src/routes/workspace.ts`
-- Add `POST /api/session/:key/compact` route
-- Calls `session.compactContext()` if available on pi SDK session
-- Returns compaction summary (tokens removed, tokens remaining)
-
-**File:** `client/src/stores/panelStore.ts`
-- Handle `compaction_done` WebSocket event (or direct API response)
-- Append compaction summary message to transcript
-
-### Acceptance
-- Model dropdown searchable, shows details, has recent section
-- Token bar shows live input/output counts during streaming
-- Session sidebar shows cost estimates
-- Compaction button appears at 90%, triggers compaction, shows summary
+Phase 5: Fix & Polish (as needed) ───────────────────────────
+  A. Fix any regressions found in build/test
+  B. Handle edge cases (empty messages, stall detection, etc.)
+```
 
 ---
 
-## Stream 3: Tauri Native Features
+## Phase 0: Cleanup (Parallel)
 
-### 3.1 — System Tray
-**File:** `tauri/src/lib.rs`
-- Add system tray with `tauri::tray::TrayIconBuilder`
-- Menu items: Show/Hide, New Session, Quit
-- Close-to-tray behavior (configurable via settings, default off)
+### Task 0A — Delete old cruft
+- **Files to delete:**
+  - `C:/Users/micha/pi-web/_old/` (entire directory — old server.js backup)
+  - `C:/Users/micha/pi-web/PLAN.md` (stale "5 streams" plan, superseded by this plan)
+  - `C:/Users/micha/pi-web/progress.md` (minimal, not useful)
+- **Files to archive/rename:**
+  - None needed; just delete
+- **Acceptance:** `_old/` gone, stale plan files gone
 
-**File:** `tauri/tauri.conf.json`
-- Add `trayIcon` config
-
-**File:** `tauri/icons/` — ensure tray icon exists (32x32 PNG)
-
-### 3.2 — Global Shortcuts
-**File:** `tauri/src/lib.rs`
-- Register `Ctrl+Shift+Space` → toggle window visibility
-- Register `Ctrl+Shift+N` → emit event to frontend to create new panel
-
-**File:** `client/src/lib/tauri.ts`
-- Listen for `new-session` Tauri event
-- Trigger `usePanelStore.getState().addPanel()`
-
-### 3.3 — Window Management
-**File:** `tauri/src/lib.rs`
-- Save/restore window position and size (use `tauri-plugin-window-state` or manual localStorage)
-- Single instance lock using `tauri-plugin-single-instance`
-- Custom titlebar toggle (send window controls to frontend)
-
-**File:** `client/src/components/layout/AppShell.tsx`
-- Add optional custom titlebar (drag region, min/max/close buttons)
-- Controlled by `useLayoutStore` setting
-
-### 3.4 — Build Pipeline
-**File:** `tauri/tauri.conf.json`
-- Configure bundle targets: msi (Windows), dmg (macOS), deb/AppImage (Linux)
-- Set app identifier, publisher, copyright
-
-**File:** `tauri/Cargo.toml`
-- Ensure all plugins are properly included
-
-**File:** `package.json`
-- Add `build:tauri` script: `npm run build && cargo tauri build`
-
-### Acceptance
-- Tray icon appears, right-click shows menu, close minimizes to tray
-- Ctrl+Shift+Space toggles window globally
-- Window position/size persists across restarts
-- `npm run build:tauri` produces installable package
+### Task 0B — Update .gitignore
+- **File:** `C:/Users/micha/pi-web/.gitignore`
+- **Changes:** Add `plan.md` (keep it local, not committed) — actually keep it since it's the active plan
+- **Acceptance:** No stale files tracked
 
 ---
 
-## Stream 4: Settings, Export & Extensions
+## Phase 1: Foundation (Parallel)
 
-### 4.1 — Settings → Models Tab
-**File:** `client/src/components/settings/SettingsDialog.tsx`
-- Replace stub text with actual UI
-- List providers and models from `useModelStore`
-- Show model details (context window, cost, thinking support)
-- Set default model per workspace (dropdown)
-- Set API key hint: "Configure in pi CLI"
+### Task 1A — Create `client/src/lib/sanitize.ts`
+- **File:** `NEW -> client/src/lib/sanitize.ts`
+- **Contents:** Single source of truth for:
+  - `escapeHtml(text: string): string`
+  - `toolSyntaxStrip(text: string): string` (moved from markdown.ts)
+- **Why:** escapeHtml currently duplicated in tools.ts, markdown.ts, panelStore.ts, server/workspace.ts
+- **Imports needed:** None (standalone)
+- **Acceptance:** Can import `escapeHtml` from `../../lib/sanitize` everywhere
 
-### 4.2 — Settings → Keybindings Tab
-**File:** `client/src/components/settings/SettingsDialog.tsx`
-- Replace static list with editable keybinding table
-- Each row: action name, current shortcut, edit button
-- Edit mode: capture next keypress, validate no conflicts
-- Save to localStorage, load on startup
+### Task 1B — Extend `ContentBlock` type in `client/src/lib/api.ts`
+- **File:** `C:/Users/micha/pi-web/client/src/lib/api.ts`
+- **Changes:** Replace simple `ContentBlock` with discriminated union:
+```typescript
+export type ContentBlock = 
+  | { type: "text"; content: string }
+  | { type: "thinking"; content: string }
+  | { type: "tool_start"; toolName: string; toolInput?: unknown; toolCallId: string }
+  | { type: "tool_end"; toolName: string; toolOutput: string; durationMs?: number; toolCallId: string; status: "success" | "error" }
+  | { type: "subagent_start"; subAgentId: string; task: string }
+  | { type: "subagent_delta"; subAgentId: string; content: string }
+  | { type: "subagent_end"; subAgentId: string; result: string; usage?: UsageInfo };
+```
+- **Also add:** `ToolCallId` generator helper (UUID short) for matching start/end pairs
+- **Why:** tool_callId lets us match tool_start→tool_end. No more fragile name-based matching.
+- **Acceptance:** Type unions work, no compile errors on existing code that uses ContentBlock
 
-**File:** `client/src/stores/settingsStore.ts` (NEW)
-- `keybindings: Record<string, string>` (action → shortcut)
-- `setKeybinding(action, shortcut)`, `resetKeybindings()`
-- Persist to localStorage
-
-**File:** `client/src/hooks/useKeyboard.ts`
-- Read keybindings from `settingsStore` instead of hardcoded
-
-### 4.3 — Settings → Data Tab
-**File:** `client/src/components/settings/SettingsDialog.tsx`
-- Export all sessions (calls `GET /api/export/all`)
-- Clear all data (calls `DELETE /api/data`)
-- Backup/restore (download JSON, upload JSON)
-- Show storage estimates
-
-**File:** `server/src/routes/data.ts` (NEW)
-- `GET /api/export/all` — bundle all sessions as JSON
-- `DELETE /api/data` — clear store
-
-### 4.4 — Export Formats
-**File:** `server/src/routes/workspace.ts`
-- Enhance `GET /api/session/:key/export` to support format param:
-  - `?format=md` (existing)
-  - `?format=html` — render as standalone HTML page with CSS
-  - `?format=pdf` — generate PDF (use `html-pdf` or similar)
-- `GET /api/session/:key/copy` — return plain text transcript
-
-**File:** `client/src/components/panel/PanelHeader.tsx`
-- Add export dropdown button (MD, HTML, PDF, Copy, Gist)
-
-### 4.5 — Share via Gist
-**File:** `server/src/routes/gist.ts` (NEW)
-- `POST /api/session/:key/gist` — create GitHub Gist from transcript
-- Requires GitHub token from settings
-
-### 4.6 — Extension Manager
-**File:** `client/src/components/settings/ExtensionManager.tsx` (NEW)
-- List installed extensions from pi SDK
-- Enable/disable per workspace
-- Install from path or URL
-- Extension config panel
-
-**File:** `server/src/routes/extensions.ts` (NEW)
-- `GET /api/extensions` — list installed
-- `POST /api/extensions/install` — install from path
-- `POST /api/extensions/:id/toggle` — enable/disable
-
-### Acceptance
-- Settings models tab shows actual model data
-- Keybindings editable, persist, take effect
-- Data tab can export/clear all
-- Session can export to MD, HTML, clipboard
-- Gist sharing works with GitHub token
-- Extension list visible, toggle works
+### Task 1C — Server-side: Use shared escapeHtml
+- **File:** `C:/Users/micha/pi-web/server/src/routes/workspace.ts`
+- **Changes:** Remove local `escapeHtml` function (lines ~350-358). Import from shared location or keep as local util.
+- **Simpler approach:** Keep server's escapeHtml since it's a simple function and server doesn't share code with client. Just note it.
+- **Acceptance:** No change needed — server is standalone. Just acknowledge the duplication.
 
 ---
 
-## Stream 5: Polish & Testing
+## Phase 2: Extraction (Parallel — Tasks A + B + C can run simultaneously)
 
-### 5.1 — Performance
-**File:** `client/src/lib/markdown.ts`
-- Memoize `renderMarkdown` per content string (use LRU cache, max 200 entries)
+### Task 2A — Create `client/src/stores/messageUtils.ts`
+- **File:** `NEW -> client/src/stores/messageUtils.ts`
+- **Extract from panelStore.ts:**
+  - `isInfrastructureMsg(content: string): boolean`
+  - `findTextMsgIdx(msgs: MessageRecord[]): number`
+  - `blocksToHtml(blocks: ContentBlock[], ...): string`
+  - `_manualExpandSet` + `_thinkIdCounter` + `nextThinkId()`
+  - `__thinkToggle` / `__thinkIsExpanded` global helpers
+- **Imports needed:**
+  - `import { ContentBlock, MessageRecord, UsageInfo } from "../lib/api"`
+  - `import { escapeHtml, renderMarkdown } from "../lib/markdown"` (for blocksToHtml)
+- **Acceptance:** messageUtils.ts exports all helpers. panelStore.ts imports from it.
 
-**File:** `client/src/components/sidebar/Sidebar.tsx`
-- Lazy-load workspace sessions on expand (fetch only when expanded)
-- Show placeholder count, fetch on first expand
+### Task 2B — Extract thinking utilities from `client/src/lib/markdown.ts`
+- **File:** `NEW -> client/src/lib/thinking.ts`
+- **Extract from markdown.ts:**
+  - `hasUnclosedThinkTag(text: string): boolean`
+  - `extractThinkingBlocks(text: string): { thinkingBlocks, content, thinkingTime }`
+  - `createThinkingSection(thinkingContent, thinkingTime?, defaultCollapsed?): string`
+  - `createThinkingSectionRaw(thinkingContent, thinkingTime?, defaultCollapsed?): string`
+  - `detectPlainThink(text: string): string | null`
+  - `normalizeWhitespace(s: string): string`
+  - `THINKING_TAGS`, `REASONING_PREFIXES` constants
+- **Import from:** `sanitize.ts` for `escapeHtml`
+- **markdown.ts changes:** Remove extracted functions. Keep `renderMarkdown`, `autolinkBareUrls`, `toolSyntaxStrip`, `squashOutsideCode`, `renderThinkingSection`, cache, hljs setup. Update imports.
+- **Why:** markdown.ts is doing too much (markdown rendering + thinking + autolink + syntax strip). Split by responsibility.
+- **Acceptance:** markdown.ts ≈150 lines (was 480). thinking.ts ≈150 lines. Both compile.
 
-**File:** `client/src/components/panel/ModelSelector.tsx`
-- Debounce search input (200ms)
+### Task 2C — Create block renderer components
+- **Directory:** `NEW -> client/src/components/chat/blocks/`
+- **Files:**
 
-**File:** `client/src/App.tsx`
-- Code-split: `React.lazy(() => import("./components/settings/SettingsDialog"))`
-- Code-split: `React.lazy(() => import("./components/CommandPalette"))`
+#### 2C-1: `TextBlock.tsx`
+```tsx
+// Simple text content block. Renders markdown.
+export function TextBlock({ content }: { content: string }) {
+  return <span dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />;
+}
+```
 
-**File:** `client/vite.config.ts`
-- Enable manual chunks: vendor (react, zustand, lucide), marked+highlight, allotment+virtual
-- Set `build.rollupOptions.output.manualChunks`
+#### 2C-2: `ThinkingBlock.tsx`
+```tsx
+// Collapsible thinking section with toggle state
+export function ThinkingBlock({ content, streaming, thinkId, ... }: Props) {
+  // Same toggle logic as current MessageBubble's ThinkingBlock
+  // Render as React component, not HTML string
+}
+```
 
-### 5.2 — Accessibility
-**File:** `client/src/components/chat/ChatView.tsx`
-- Add `aria-live="polite"` region for streaming messages
-- Announce new messages via invisible live region
+#### 2C-3: `ToolBlock.tsx`
+```tsx
+// Dispatches to typed renderers or generic fallback
+export function ToolBlock({ block }: { block: ToolStartBlock | ToolEndBlock }) {
+  const type = classifyTool(block.toolName);
+  switch (type) {
+    case "read": return <ToolRead block={block} />;
+    case "write": case "edit": return <ToolDiff block={block} />;
+    case "bash": return <ToolBash block={block} />;
+    case "grep": case "find": return <ToolSearch block={block} />;
+    case "ls": return <ToolLs block={block} />;
+    default: return <ToolGeneric block={block} />;  // ← spanner/gear fallback
+  }
+}
+```
 
-**File:** `client/src/components/settings/SettingsDialog.tsx`
-- Focus trap: on open, focus first input; Tab/Esc trap inside modal
-- `aria-modal="true"`, `role="dialog"`
+#### 2C-4: `ToolRead.tsx`, `ToolWrite.tsx`, `ToolBash.tsx`, `ToolSearch.tsx`, `ToolLs.tsx`, `ToolGeneric.tsx`
+One file per tool category. Each is a React component rendering the tool output. Extracted from current HTML builders in `tools.ts`.
 
-**File:** `client/src/components/layout/AppShell.tsx`
-- Add skip-to-content link (first focusable element)
+#### 2C-5: `SubAgentBlock.tsx`
+```tsx
+// Sub-agent status card (start → running → done)
+export function SubAgentBlock({ block }: { block: SubAgentBlock }) { ... }
+```
 
-**File:** `client/src/index.css`
-- Add `@media (prefers-reduced-motion: reduce)` rules
-- Disable animations, transitions, pulse effects
+- **Imports needed:**
+  - `classifyTool` from `../../lib/tools`
+  - `escapeHtml` from `../../lib/sanitize`
+  - `renderMarkdown` from `../../lib/markdown`
+  - `ContentBlock` types from `../../lib/api`
+- **Why React components instead of HTML strings:** Virtualizer reconciliation works. No more dangerouslySetInnerHTML for infra content. Proper event handling (copy, run code).
+- **Acceptance:** Each component handles its tool type plus a clean generic fallback.
 
-**File:** Multiple components
-- Audit all interactive elements for ARIA labels (buttons, inputs, selects)
-- Ensure all images/icons have `aria-hidden="true"` or alt text
-- Tab order is logical
+---
 
-### 5.3 — Error Handling
-**File:** `client/src/lib/ws.ts`
-- Add exponential backoff to reconnect (2s, 4s, 8s, 16s, max 30s)
+## Phase 3: Core Rewrite (Sequential — 3A → 3B → 3C)
 
-**File:** `client/src/stores/panelStore.ts`
-- On WebSocket reconnect, reload active session transcripts
-- Auto-reopen last active session on reconnect
+### Task 3A — Create `client/src/stores/panelEvents.ts`
+- **File:** `NEW -> client/src/stores/panelEvents.ts`
+- **Purpose:** New WebSocket event handler that accumulates blocks into ONE streaming message
+- **Key logic change:**
 
-**File:** `client/src/components/ErrorBoundary.tsx`
-- Show "session crashed" recovery UI with "reopen" button
-- Log errors to console with session context
+```typescript
+// Instead of appendMessage for each event:
+wsSubscribe((event) => {
+  set((s) => ({
+    panels: s.panels.map((p) => {
+      if (p.sessionKey !== event.sessionKey) return p;
+      const blocks = [...p.streamingBlocks];
+      
+      switch (event.eventType) {
+        case "message_start":
+          return { ...p, streaming: true, streamingBlocks: [], streamingOutputTokens: 0 };
+        
+        case "text_delta":
+          upsertBlock(blocks, { type: "text", content: event.text! });
+          break;
+        
+        case "thinking_delta":
+          upsertBlock(blocks, { type: "thinking", content: event.text! });
+          break;
+        
+        case "tool_start":
+          blocks.push({ type: "tool_start", toolName: event.toolName!, toolInput: event.toolInput, toolCallId: genId() });
+          break;
+        
+        case "tool_end":
+          // Find matching tool_start by name (or toolCallId) and append end block
+          blocks.push({ type: "tool_end", toolName: event.toolName!, toolOutput: event.toolOutput!, durationMs, toolCallId });
+          break;
+        
+        case "agent_end":
+          // Freeze blocks into message, set streaming=false
+          break;
+      }
+      
+      // Update last assistant message with current blocks
+      return { ...p, streamingBlocks: blocks, messages: updateLastMsg(p.messages, blocks) };
+    }),
+  }));
+});
+```
 
-**File:** `server/src/routes/workspace.ts`
-- Add proper error messages for disk full, permission denied
-- Return structured errors: `{ error: string, code: "DISK_FULL" | "PERMISSION" | "NOT_FOUND" }`
+- **Helper function:** `upsertBlock(blocks, newBlock)` — if last text/thinking block is same type, append content. Otherwise push new.
+- **No more:** `appendMessage()`, `updateLastAssistant()`, `replaceLastAssistant()`, `flushThinking()`, `upsertLiveThinking()`, `closeLiveThinking()`
+- **Imports needed:**
+  - `ContentBlock` from `../lib/api`
+  - `subscribe` from `../lib/ws`
+  - `usePanelStore` (contains setState)
+  - `messageUtils` for `updateLastMsg` helper
+- **Acceptance:** New handler processes all events. Old handler in panelStore.ts can be disabled.
 
-### 5.4 — Testing
-**File:** `client/src/__tests__/` (NEW directory)
-- `stores/panelStore.test.ts` — test addPanel, removePanel, sendMessage, branch
-- `stores/themeStore.test.ts` — test mode switching, accent, persistence
-- `lib/tokens.test.ts` — test token formatting, cost calc
-- `lib/markdown.test.ts` — test code highlighting, link rendering
-- `components/MessageBubble.test.tsx` — test user/assistant rendering
-- `components/Composer.test.tsx` — test Enter/Shift+Enter, empty submit
-- `components/ToolCard.test.tsx` — test each tool type rendering
+### Task 3B — Rewrite `client/src/components/chat/MessageBubble.tsx`
+- **File:** `C:/Users/micha/pi-web/client/src/components/chat/MessageBubble.tsx`
+- **Current:** ~400 lines, mixed concerns (role line, thinking toggle, code execution, model info popup, HTML rendering)
+- **After:** ~100 lines, dispatch to block components
 
-**File:** `client/package.json`
-- Add `vitest`, `@testing-library/react`, `jsdom` dev deps
-- Add `"test": "vitest run"` script
+```tsx
+export const MessageBubble = memo(function MessageBubble({ message, streaming, panelIndex }) {
+  // If message has blocks → render each block via BlockRenderer
+  // If blocks but no streaming → render blocksToHtml (backward compat for stored messages)
+  // If legacy content (no blocks) → render markdown
+  
+  return (
+    <div className="flex flex-col mb-2">
+      {/* Role line — dot + label + time + tokens */}
+      <RoleLine message={message} panelIndex={panelIndex} />
+      
+      {/* Message body */}
+      <div className="text-xs">
+        {message.blocks ? (
+          message.blocks.map((block, i) => (
+            <BlockRenderer key={i} block={block} streaming={streaming} thinkId={`${panelIndex}-${i}`} />
+          ))
+        ) : (
+          <span dangerouslySetInnerHTML={{ __html: formatted }} />
+        )}
+      </div>
+    </div>
+  );
+});
 
-**File:** `server/src/__tests__/` (NEW directory)
-- `store.test.ts` — test CRUD operations on JSON store
-- `sessionStore.test.ts` — test session lifecycle (may need mock pi SDK)
+// BlockRenderer dispatches to typed components
+function BlockRenderer({ block, streaming, thinkId }) {
+  switch (block.type) {
+    case "text": return <TextBlock content={block.content} streaming={streaming} />;
+    case "thinking": return <ThinkingBlock content={block.content} streaming={streaming} thinkId={thinkId} />;
+    case "tool_start": case "tool_end": return <ToolBlock block={block} />;
+    case "subagent_start": case "subagent_delta": case "subagent_end": return <SubAgentBlock block={block} />;
+    default: return null;
+  }
+}
+```
 
-### Acceptance
-- Client bundle under 500KB gzipped
-- All interactive elements keyboard-navigable
-- Screen reader announces new messages
-- Exponential backoff works on disconnect
-- Error boundary shows recovery UI
-- 10+ unit/component tests pass
+- **Extract:** `RoleLine` component (role dot, label, model info popup, time, token count)
+- **Extract:** `executeInlineCode` → stays in MessageBubble or moves to utils
+- **Remove:** `ThinkingBlock` inline component (moved to `blocks/ThinkingBlock.tsx`)
+- **Imports change:**
+  - Remove: `renderToolStart`, `renderToolEnd` (no longer needed)
+  - Remove: `createThinkingSectionRaw`, `escapeHtml` (handled by block components)
+  - Add: `BlockRenderer` from local or blocks/index.ts
+- **Acceptance:** MessageBubble is thin dispatcher. No HTML string building.
+
+### Task 3C — Slim `client/src/stores/panelStore.ts`
+- **File:** `C:/Users/micha/pi-web/client/src/stores/panelStore.ts`
+- **Remove:**
+  - WebSocket event handler code → moved to panelEvents.ts
+  - `appendMessage`, `updateLastAssistant`, `replaceLastAssistant` → no longer needed (blocks-based)
+  - `setThinkingContent`, `flushThinking`, `upsertLiveThinking`, `closeLiveThinking` → replaced by block accumulation in panelEvents.ts
+  - `_toolStartTimes` → replaced by toolCallId in ContentBlock
+  - `findTextMsgIdx`, `isInfrastructureMsg` → moved to messageUtils.ts
+  - `blocksToHtml` → moved to messageUtils.ts
+  - `_manualExpandSet`, `_thinkIdCounter`, `nextThinkId`, `__thinkToggle`, `__thinkIsExpanded` → moved to messageUtils.ts
+  - `renderSubAgentStart`, `renderSubAgentRunning`, `renderSubAgentDone`, `renderLiveThinking` → replaced by block components
+  - `escapeHtml` import → not needed (uses sanitize.ts)
+  - `createThinkingSectionRaw`, `renderMarkdown` imports → not needed (uses messageUtils)
+- **Keep:**
+  - `PanelData` interface (may slim: remove `thinkingContent`, `thinkingStartTime`, `stallTimer`)
+  - Panel CRUD: `addPanel`, `removePanel`, `setActive`, `movePanel`
+  - `setWorkspace`, `setModel`, `setThinking`, `setTitle`, `toggleHideThinking`
+  - `createAndSend`, `sendMessage`, `openExistingSession`
+  - `branchFromMessage`, `spawnSubAgent`, `regenLastMessage`, `stopStreaming`
+  - `onReconnect` handler
+  - `pinMessage`, `unpinMessage`
+  - `persist` / `loadPersisted`
+- **Expected:** panelStore.ts goes from ~1430 lines → ~400 lines
+- **Acceptance:** All existing functionality still works. Imports updated.
+
+---
+
+## Phase 4: Cleanup (Parallel — 4A + 4B independent, then 4C + 4D)
+
+### Task 4A — Clean `client/src/lib/tools.ts`
+- **File:** `C:/Users/micha/pi-web/client/src/lib/tools.ts`
+- **Remove:**
+  - `renderToolStart()`, `renderToolEnd()`, `renderToolBody()`, `renderReadBody()`, `renderDiffBody()`, `renderBashBody()`, `renderResultsTable()`, `renderFileTree()`, `renderGenericBody()`
+  - `renderReadBody`, `renderDiffBody`, `renderBashBody`, `renderResultsTable`, `renderFileTree`, `renderGenericBody`
+  - `toolIcon()`, `toolIconDone()`, `toolLabel()`, `toolLabelDone()`
+  - `SVG_READ`, `SVG_WRITE`, `SVG_EDIT`, `SVG_BASH`, `SVG_SEARCH`, `SVG_FOLDER`, `SVG_GEAR`
+  - `extractPath()`, `extractCommand()`
+  - `escapeHtml()` (now in sanitize.ts)
+- **Keep:**
+  - `classifyTool()` — still needed by ToolBlock.tsx
+  - `ToolType` type — still needed
+  - `ToolStart`, `ToolEnd` interfaces (or move to api.ts)
+- **size reduction:** ~298 lines → ~30 lines
+- **Acceptance:** tools.ts only exports classifyTool, ToolType, ToolStart, ToolEnd.
+
+### Task 4B — Remove sub-agent HTML renderers from panelStore.ts
+- **Already handled in Task 3C** — renderSubAgentStart, renderSubAgentRunning, renderSubAgentDone are deleted.
+
+### Task 4C — Update tests
+- **File:** `C:/Users/micha/pi-web/client/src/__tests__/lib/tokens.test.ts`
+- **Changes:**
+  - Test `classifyTool` only (remove tests for `renderToolStart`, `renderToolEnd`, `escapeHtml`)
+  - Add tests for new block components (ToolBlock, ToolRead, ToolGeneric, etc.)
+  - `escapeHtml` tests → move to `sanitize.test.ts`
+- **New file:** `client/src/__tests__/lib/sanitize.test.ts`
+  - Test `escapeHtml`, `toolSyntaxStrip`
+- **New file:** `client/src/__tests__/components/block-renderers.test.tsx`
+  - Test ToolBlock renders known types + generic fallback
+  - Test ThinkingBlock collapse/expand
+- **Acceptance:** All existing tests pass. New tests cover new block renderers.
+
+### Task 4D — Build + test verification
+- Run `npm run build -w client` — must compile clean
+- Run `npm run lint -w client` — no new warnings
+- Run `npx vitest run` — all tests pass
+- Run `npm run dev` — app loads, WebSocket connects, messages render
+
+---
+
+## Phase 5: Fix & Polish
+
+### Task 5A — Regression fixes
+- **Stall detection:** Must still work with new message model
+- **Stop/continue:** `stopStreaming()` still needs to work — may need to handle partial blocks
+- **Sub-agent cards:** Must still spawn and render properly
+- **Pin messages:** Must still work after message model change
+- **Export:** `GET /api/session/:key/export` still works (server-side, untouched)
+- **Persistence:** Messages with old HTML format still render for backward compatibility
+
+### Task 5B — Edge cases
+- Empty streaming response: no blocks → don't create empty message
+- Tool-only response (no text blocks): renders tools inline
+- Very long tool output: truncation still works in ToolGeneric (pre block with max-height)
+- Concurrent blocks: text + thinking interleaved (e.g., text, think, text, tool, text) handled by upsertBlock
+
+### Task 5C — Commit strategy
+Each wave commits to main with messages:
+```
+Wave 0: "chore: delete stale files (_old/, PLAN.md, progress.md)"
+Wave 1: "refactor: create sanitize.ts, extend ContentBlock types"
+Wave 2: "refactor: extract messageUtils, thinking.ts, block renderers"  
+Wave 3: "refactor: panelEvents block-based handler, slim panelStore, slim MessageBubble"
+Wave 4: "cleanup: remove HTML string builders, update tests"
+Wave 5: "fix: address regressions found in verification"
+```
+
+---
+
+## Files Summary
+
+### New Files (9)
+| File | Purpose |
+|------|---------|
+| `client/src/lib/sanitize.ts` | Shared escapeHtml, toolSyntaxStrip |
+| `client/src/lib/thinking.ts` | Thinking block extraction, creation |
+| `client/src/stores/messageUtils.ts` | Block helpers from panelStore |
+| `client/src/stores/panelEvents.ts` | New WebSocket event handler |
+| `client/src/components/chat/blocks/TextBlock.tsx` | Text content block renderer |
+| `client/src/components/chat/blocks/ThinkingBlock.tsx` | Thinking block renderer |
+| `client/src/components/chat/blocks/ToolBlock.tsx` | Tool dispatcher (typed + generic) |
+| `client/src/components/chat/blocks/ToolRead.tsx` | Read tool renderer |
+| `client/src/components/chat/blocks/ToolWrite.tsx` | Write/edit diff renderer |
+| `client/src/components/chat/blocks/ToolBash.tsx` | Bash tool renderer |
+| `client/src/components/chat/blocks/ToolSearch.tsx` | Grep/find results renderer |
+| `client/src/components/chat/blocks/ToolLs.tsx` | Directory listing renderer |
+| `client/src/components/chat/blocks/ToolGeneric.tsx` | Fallback spanner/gear renderer |
+| `client/src/components/chat/blocks/SubAgentBlock.tsx` | Sub-agent card renderer |
+
+### Modified Files (9)
+| File | Changes |
+|------|---------|
+| `client/src/lib/api.ts` | Extend ContentBlock with discriminated unions |
+| `client/src/lib/markdown.ts` | Remove thinking utilities → import from thinking.ts |
+| `client/src/lib/tools.ts` | Delete HTML builders, keep only classifyTool + types |
+| `client/src/stores/panelStore.ts` | Remove WebSocket handler, remove HTML builders, remove flusheThinking, slim by ~1000 lines |
+| `client/src/components/chat/MessageBubble.tsx` | Dispatch to block components, extract RoleLine |
+| `client/src/__tests__/lib/tokens.test.ts` | Update for new tools.ts exports |
+| `client/src/__tests__/lib/markdown.test.ts` | Update imports (escapeHtml from sanitize) |
+| `client/src/__tests__/lib/sanitize.test.ts` | NEW test file for escapeHtml, toolSyntaxStrip |
+| `server/src/routes/workspace.ts` | Keep local escapeHtml (no change needed) |
+
+### Deleted Files
+| File | Why |
+|------|-----|
+| `_old/` (directory) | Old server.js backup |
+| `PLAN.md` | Stale, superseded by this plan |
+| `progress.md` | Minimal, not useful |
+
+---
+
+## Risks & Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Backward compat: old stored messages have HTML content, no blocks | Rendering old transcripts breaks | MessageBubble keeps `blocksToHtml` fallback. If `blocks` array exists, use block renderers. If not, render `content` as HTML (backward compat). |
+| tool_call_id matching fails for tool_start→tool_end | Tools orphaned | Use sequential counter + toolName fallback. If no matching start, render tool_end alone. |
+| Sub-agent events still use old HTML format | Sub-agent cards don't render | SubAgentBlock can render both new block format AND old HTML string content (check for includes('sub-agent-card')) |
+| Virtualizer measureElement breaks with dynamic block heights | Chat jumpiness | Block components have stable container structure. Use `estimateSize: () => 150` for initial, virtualizer adjusts. |
+| panelStore.ts slimming breaks other imports | Compile errors | Each extraction verified by build. All imports updated in same PR. |
+| React key collisions in block renderers | Wrong toggle state, collapsed thinking | Use `${panelIndex}-${msgIdx}-${blockIdx}` as key for ThinkingBlock. |
+
+---
+
+## Verification Checklist
+
+- [ ] `npm run build -w client` passes (no errors, no warnings)
+- [ ] `npx vitest run` passes (all existing + new tests)
+- [ ] `npm run lint -w client` passes
+- [ ] Dev server starts, WebSocket connects
+- [ ] Send message → tool_start/tool_end render inline, NOT as separate messages
+- [ ] Thinking blocks render inside the same message, not as separate entries
+- [ ] Generic unknown tool shows gear/spanner icon fallback
+- [ ] Old saved sessions still display (HTML backward compat path)
+- [ ] Pin/unpin, branch, regen, stop/continue all work
+- [ ] Sub-agent cards render properly
+- [ ] Copy code button works on code blocks

@@ -8,6 +8,23 @@ import { createThinkingSectionRaw, escapeHtml, renderMarkdown } from "../lib/mar
 import { useModelStore } from "./modelStore";
 import { useSettingsStore } from "./settingsStore";
 
+/**
+ * Merge a new text chunk into existing content, stripping any overlap at word boundaries.
+ * Some providers (DeepSeek with thinking) emit chunks that repeat the tail of the previous chunk.
+ * E.g. existing="Hello world " chunk="world foo" → result="Hello world foo"
+ */
+function mergeDelta(existing: string, chunk: string): string {
+  if (!existing) return chunk;
+  // Find longest suffix of existing that matches prefix of chunk
+  const maxOverlap = Math.min(existing.length, chunk.length);
+  for (let len = maxOverlap; len > 0; len--) {
+    if (existing.slice(-len) === chunk.slice(0, len)) {
+      return existing + chunk.slice(len);
+    }
+  }
+  return existing + chunk;
+}
+
 export interface PanelData {
   id: number;
   workspacePath: string | null;
@@ -208,15 +225,8 @@ export const usePanelStore = create<PanelState>((set, get) => {
               const blocks = [...p.streamingBlocks];
               const last = blocks[blocks.length - 1];
               if (last && last.type === "text") {
-                // Dedup: some providers (DeepSeek) send full text in each delta
-                const text = event.text!;
-                const existing = last.content;
-                const deduped = text.length > existing.length && text.startsWith(existing)
-                  ? text  // full-text resend — replace
-                  : existing.endsWith(text)
-                    ? existing  // duplicate — skip
-                    : existing + text;  // normal delta — append
-                blocks[blocks.length - 1] = { ...last, content: deduped };
+                // Overlap dedup: some providers send chunks overlapping at word boundaries
+                blocks[blocks.length - 1] = { ...last, content: mergeDelta(last.content, event.text!) };
               } else {
                 blocks.push({ type: "text", content: event.text! });
               }
@@ -250,14 +260,7 @@ export const usePanelStore = create<PanelState>((set, get) => {
               const blocks = [...p.streamingBlocks];
               const last = blocks[blocks.length - 1];
               if (last && last.type === "thinking") {
-                const text = event.text!;
-                const existing = last.content;
-                const deduped = text.length > existing.length && text.startsWith(existing)
-                  ? text  // full-text resend — replace
-                  : existing.endsWith(text)
-                    ? existing  // duplicate — skip
-                    : existing + text;  // normal delta — append
-                blocks[blocks.length - 1] = { ...last, content: deduped };
+                blocks[blocks.length - 1] = { ...last, content: mergeDelta(last.content, event.text!) };
               } else {
                 blocks.push({ type: "thinking", content: event.text! });
               }

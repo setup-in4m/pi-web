@@ -1,3 +1,5 @@
+import { escapeHtml } from "./sanitize";
+
 export type ToolType = "read" | "write" | "edit" | "bash" | "grep" | "find" | "ls" | "unknown";
 
 export function classifyTool(toolName: string): ToolType {
@@ -295,11 +297,4 @@ function extractCommand(input: unknown): string {
   return "Running command…";
 }
 
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+

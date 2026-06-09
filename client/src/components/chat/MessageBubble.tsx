@@ -1,10 +1,11 @@
 import { useMemo, useCallback, useState, useEffect, memo } from "react";
-import type { MessageRecord } from "../../lib/api";
+import type { MessageRecord, ContentBlock } from "../../lib/api";
 import { renderMarkdown, escapeHtml } from "../../lib/markdown";
 import { formatTime } from "../../lib/time";
 import { useModelStore } from "../../stores/modelStore";
-import { usePanelStore, blocksToHtml } from "../../stores/panelStore";
+import { usePanelStore } from "../../stores/panelStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { TextBlock, ThinkingBlock, ToolBlock, SubAgentBlock } from "./blocks";
 
 interface Props {
   message: MessageRecord;
@@ -62,53 +63,51 @@ function executeInlineCode(code: string, lang: string, btn: HTMLElement) {
   }
 }
 
-/** Thinking block as a React component — owns its own collapse state via useState.
- *  Toggle survives re-renders because React preserves component state
- *  when key/index stays the same across renders. */
-function ThinkingBlock({ content, streaming, defaultCollapsed, thinkId }: { content: string; streaming: boolean; defaultCollapsed: boolean; thinkId?: string }) {
-  // Restore toggle from global state if remounted (virtualizer recycle safety)
-  const initialExpanded = thinkId && (window as any).__thinkIsExpanded
-    ? (window as any).__thinkIsExpanded(thinkId)
-    : null;
-  const [collapsed, setCollapsed] = useState(
-    initialExpanded !== null ? !initialExpanded : defaultCollapsed
-  );
-  const toggle = useCallback(() => {
-    setCollapsed(c => {
-      const next = !c;
-      if (thinkId && (window as any).__thinkToggle) {
-        (window as any).__thinkToggle(thinkId, !next);
-      }
-      return next;
-    });
-  }, [thinkId]);
-
-  if (streaming) {
-    return (
-      <div className={`thinking-section${collapsed ? ' collapsed' : ''}`} data-live-thinking="true">
-        <div className="thinking-header" onClick={toggle} style={{cursor:'pointer'}}>
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse flex-shrink-0"></span>
-          <span>Thinking…</span>
-          <span className="thinking-toggle" style={{transform:'none'}}>▾</span>
+/** Render a single content block as a React element */
+function renderBlock(block: ContentBlock, index: number, opts: { streaming: boolean; panelIndex?: number; defaultCollapsed: boolean }): React.ReactNode {
+  switch (block.type) {
+    case "text":
+      return opts.streaming ? (
+        <span key={index}>
+          {escapeHtml(block.content)}
+          <span className="streaming-cursor">▊</span>
+        </span>
+      ) : (
+        <div key={index} className="block-content">
+          <TextBlock content={block.content} />
         </div>
-        <div className="thinking-content">
-          <div className="thinking-content-inner">{escapeHtml(content)}<span className="streaming-cursor">▊</span></div>
+      );
+    case "thinking": {
+      const thinkId = opts.panelIndex != null ? `stream-${opts.panelIndex}-${index}` : undefined;
+      return (
+        <div key={index} className="block-content">
+          <ThinkingBlock
+            content={block.content}
+            streaming={opts.streaming}
+            defaultCollapsed={opts.defaultCollapsed}
+            thinkId={thinkId}
+          />
         </div>
-      </div>
-    );
+      );
+    }
+    case "tool_start":
+    case "tool_end":
+      return (
+        <div key={index} className="block-content">
+          <ToolBlock block={block} />
+        </div>
+      );
+    case "subagent_start":
+    case "subagent_delta":
+    case "subagent_end":
+      return (
+        <div key={index} className="block-content">
+          <SubAgentBlock block={block} />
+        </div>
+      );
+    default:
+      return null;
   }
-
-  return (
-    <div className={`thinking-section${collapsed ? ' collapsed' : ''}`}>
-      <div className="thinking-header" onClick={toggle}>
-        <span>View thinking process</span>
-        <span className="thinking-toggle">▾</span>
-      </div>
-      <div className="thinking-content">
-        <div className="thinking-content-inner" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />
-      </div>
-    </div>
-  );
 }
 
 export const MessageBubble = memo(function MessageBubble({ message, streaming, panelIndex }: Props) {
@@ -131,23 +130,7 @@ export const MessageBubble = memo(function MessageBubble({ message, streaming, p
     document.head.appendChild(style);
   }, [streaming]);
 
-/** Infrastructure messages (thinking, tool cards, sub-agents) — render HTML as-is */
-  const isInfra = !!(message.content) && (
-    message.content.includes('thinking-section') ||
-    message.content.includes('tool-card') ||
-    message.content.includes('sub-agent-card') ||
-    message.content.includes('data-live-thinking')
-  );
-
-  /** True if message is pure infra (no text blocks, only infra HTML).
-   *  When all blocks are thinking + no text blocks, treat as infra. */
-  const isPureInfra = isInfra && (
-    !message.blocks ||
-    message.blocks.length === 0 ||
-    message.blocks.every(b => b.type === 'thinking')
-  );
-
-  // Blocks-based message (new unified format): render from blocks within one message
+  // Blocks-based message: render from blocks array
   const hasBlocks = message.blocks && message.blocks.length > 0;
   // True while streaming with no content yet (placeholder waiting for first delta)
   const isEmptyStreaming = streaming && !isUser && !hasBlocks && !message.content;
@@ -159,77 +142,50 @@ export const MessageBubble = memo(function MessageBubble({ message, streaming, p
     return s.panels[panelIndex]?.hideThinking ?? false;
   });
 
+  /** For user messages or messages without blocks: render markdown/plain text */
   const formatted = useMemo<string>(() => {
     if (isUser) return formatSimple(content);
-
-    // Pure infra: render raw HTML, no role line
-    if (isPureInfra) {
-      return content;
-    }
-
-    if (streaming) {
-      if (!hasBlocks) {
-        // Legacy streaming (no blocks): escaped plain text
+    if (!hasBlocks) {
+      // Legacy message (no blocks) or pure text: render as markdown
+      if (streaming) {
         return escapeHtml(content).replace(/\n/g, '<br>');
       }
-      // Blocks-based streaming: rendered as React elements below (not HTML string)
-      return '';
+      return renderMarkdown(content);
     }
+    // Messages with blocks: React elements handle rendering below
+    return '';
+  }, [content, isUser, streaming, hasBlocks]);
 
-    // After streaming: render full markdown or use blocks HTML
-    if (hasBlocks && message.blocks) {
-      // Convert blocks to proper HTML with thinking sections (for historical messages)
-      if (message.content.includes('thinking-section')) {
-        return message.content; // already has HTML from agent_end
-      }
-      return blocksToHtml(message.blocks, hideThinking, null, defaultCollapsed);
-    }
-
-    return renderMarkdown(content);
-  }, [content, message.blocks, isUser, streaming, isPureInfra, hasBlocks, hideThinking, defaultCollapsed]);
-
-  // During streaming with blocks, render each block as a React element.
-  // Each ThinkingBlock manages its own collapse state — toggle survives re-renders.
-  // thinkId prefix uses panelIndex so virtualizer recycles preserve state.
-  const streamThinkPrefix = panelIndex != null ? `stream-${panelIndex}` : '';
+  /** During streaming or when blocks are present, render each block as a React component */
   const blockElements = useMemo(() => {
-    if (!(streaming && hasBlocks && message.blocks)) return null;
-    return message.blocks.map((block, i) => {
-        if (block.type === 'thinking') {
-          const thinkId = streamThinkPrefix ? `${streamThinkPrefix}-${i}` : undefined;
-          return (
-            <ThinkingBlock
-              key={i}
-              thinkId={thinkId}
-              content={block.content}
-              streaming={true}
-              defaultCollapsed={defaultCollapsed}
-            />
-          );
-        }
-        return (
-          <span key={i}>
-            {escapeHtml(block.content)}
-            <span className="streaming-cursor">▊</span>
-          </span>
-        );
-      });
-  }, [streaming, hasBlocks, message.blocks, streamThinkPrefix, defaultCollapsed]);
+    if (!hasBlocks || !message.blocks) return null;
+    if (!streaming && message.content) {
+      // Post-streaming: message.content has the final HTML from agent_end blocksToHtml.
+      // But blocks array is preferred for React rendering. If content has thinking-section,
+      // it was rendered by blocksToHtml — but we render from blocks directly now.
+      // Skip HTML rendering — blocks are the source of truth.
+    }
+    return message.blocks.map((block, i) =>
+      renderBlock(block, i, { streaming: !!streaming, panelIndex, defaultCollapsed: !!defaultCollapsed })
+    );
+  }, [hasBlocks, message.blocks, streaming, panelIndex, defaultCollapsed]);
+
+  // Check if ALL blocks are infra (tool/subagent/thinking) with no text — hide role line
+  const allInfra = hasBlocks && message.blocks!.every(b => b.type !== "text");
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
 
-    // Post-streaming thinking toggle (dangerouslySetInnerHTML path)
+    // Legacy thinking toggle (HTML-rendered thinking sections)
     const thinkingHeader = target.closest("[data-pi-toggle='thinking']");
     if (thinkingHeader) {
       const section = thinkingHeader.closest(".thinking-section");
       if (section) {
         const wasCollapsed = section.classList.contains('collapsed');
         section.classList.toggle('collapsed');
-        // Save toggle state so blocksToHtml preserves it across rebuilds
         const thinkId = section.getAttribute('data-think-id');
         if (thinkId && (window as any).__thinkToggle) {
-          (window as any).__thinkToggle(thinkId, wasCollapsed); // wasCollapsed → nowExpanded=true
+          (window as any).__thinkToggle(thinkId, wasCollapsed);
         }
       }
       return;
@@ -267,23 +223,20 @@ export const MessageBubble = memo(function MessageBubble({ message, streaming, p
 
   const dotColor = isUser ? 'var(--color-accent)' : modelDotColor(modelDisplay);
   const roleLabel = isUser ? 'You' : (modelDisplay?.split('/').pop() || 'pi');
-
   const tokens = estimateTokens(message.content || '');
 
-  // Pure infra messages (tool cards, standalone thinking blocks, sub-agent cards)
-  // render inline without role line — visually attach to the main response.
-  // When blocks contain text (not just thinking), keep role line.
-  if (isPureInfra) {
+  // Pure infrastructure messages (no text blocks): render inline without role line
+  if (allInfra && !isUser && !streaming) {
     return (
       <div className="mb-0 animate-[fadeIn_0.2s_ease]">
         <div onClick={handleClick} className="text-[var(--color-t1)]">
-          <span dangerouslySetInnerHTML={{ __html: formatted }} />
+          {blockElements}
         </div>
       </div>
     );
   }
 
-  // Empty streaming placeholder — show subtle waiting indicator, no full role line
+  // Empty streaming placeholder — show subtle waiting indicator
   if (isEmptyStreaming) {
     return (
       <div className="flex flex-col mb-2 animate-[fadeIn_0.2s_ease]">
@@ -303,7 +256,7 @@ export const MessageBubble = memo(function MessageBubble({ message, streaming, p
 
   return (
     <div className="flex flex-col mb-2 animate-[fadeIn_0.2s_ease] group/msg">
-      {/* Role line — clean: dot + label + time + tokens, no action buttons */}
+      {/* Role line */}
       <div className="flex items-center gap-1.5 mb-0.5 relative">
         <span
           className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -346,10 +299,15 @@ export const MessageBubble = memo(function MessageBubble({ message, streaming, p
         isUser ? "bg-[var(--color-bg3)] border border-[var(--color-bdl)] rounded px-3 py-2" : ""
       }`}>
         <div onClick={handleClick} className="text-[var(--color-t1)] whitespace-pre-wrap break-words [&_p]:my-0.5">
-          {blockElements || (formatted != null ? (
+          {/* Render block components when available */}
+          {blockElements}
+          {/* Fallback: rendered markdown/HTML for user messages or legacy */}
+          {!blockElements && formatted && (
             <span dangerouslySetInnerHTML={{ __html: formatted }} />
-          ) : null)}
-          {streaming && !blockElements && <span className="streaming-cursor" aria-hidden="true">▊</span>}
+          )}
+          {streaming && !blockElements && !formatted && (
+            <span className="streaming-cursor" aria-hidden="true">▊</span>
+          )}
         </div>
       </div>
     </div>

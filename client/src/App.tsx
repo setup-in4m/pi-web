@@ -6,6 +6,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { SidebarSkeleton } from "./components/Skeletons";
 import { PanelSkeleton } from "./components/Skeletons";
 import { useKeyboard } from "./hooks/useKeyboard";
+import { initPanelEvents } from "./stores/panelEvents";
 
 // Code-split heavy dialog components
 const SettingsDialog = lazy(() => import("./components/settings/SettingsDialog").then(m => ({ default: m.SettingsDialog })));
@@ -26,6 +27,7 @@ export default function App() {
     loadWorkspaces();
     loadModels();
     wsConnect();
+    initPanelEvents();
   }, [loadWorkspaces, loadModels]);
 
   useKeyboard();

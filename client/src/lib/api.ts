@@ -67,9 +67,26 @@ export interface SessionRecord {
   thinking: string | null;
 }
 
-export interface ContentBlock {
-  type: "thinking" | "text";
-  content: string;
+export interface UsageInfo {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cost?: number;
+}
+
+export type ContentBlock =
+  | { type: "text"; content: string }
+  | { type: "thinking"; content: string }
+  | { type: "tool_start"; toolName: string; toolInput?: unknown; toolCallId: string }
+  | { type: "tool_end"; toolName: string; toolOutput: string; durationMs?: number; toolCallId: string; status: "success" | "error" }
+  | { type: "subagent_start"; subAgentId: string; task: string }
+  | { type: "subagent_delta"; subAgentId: string; task: string; content: string }
+  | { type: "subagent_end"; subAgentId: string; task: string; result: string; usage?: UsageInfo };
+
+/** Generate a short unique ID for matching tool_start → tool_end pairs */
+let _toolCallCounter = 0;
+export function genToolCallId(): string {
+  return `tc_${Date.now().toString(36)}_${++_toolCallCounter}`;
 }
 
 export interface MessageRecord {
@@ -78,13 +95,6 @@ export interface MessageRecord {
   timestamp: string;
   /** Structured content blocks (text + thinking within one message). When present, UI renders from blocks. */
   blocks?: ContentBlock[];
-}
-
-export interface UsageInfo {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-  cost?: number;
 }
 
 // API calls

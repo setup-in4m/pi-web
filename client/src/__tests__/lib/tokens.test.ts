@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
+import { escapeHtml } from "../../lib/sanitize";
 import {
   classifyTool,
   renderToolStart,
   renderToolEnd,
-  escapeHtml,
 } from "../../lib/tools";
 
 describe("classifyTool", () => {

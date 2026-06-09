@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { renderMarkdown, escapeHtml } from "../../lib/markdown";
+import { escapeHtml } from "../../lib/sanitize";
+import { renderMarkdown } from "../../lib/markdown";
 
 describe("renderMarkdown", () => {
   describe("code blocks", () => {
